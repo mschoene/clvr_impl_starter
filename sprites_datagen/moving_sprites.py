@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset,IterableDataset
 
 from general_utils import AttrDict
 from sprites_datagen.utils.template_blender import TemplateBlender
@@ -9,9 +9,13 @@ from sprites_datagen.utils.trajectory import ConstantSpeedTrajectory
 
 class MovingSpriteDataset(Dataset):
     """Dataset of multiple sprites bouncing in frame, contains different reward annotations."""
-    def __init__(self, spec):
+    def __init__(self, spec, num_samples):
         self._spec = spec
+        self._num_samples = num_samples
         self._generator = DistractorTemplateMovingSpritesGenerator(self._spec)
+        
+    def __len__(self):
+        return self._num_samples
 
     def __getitem__(self, item):
         traj = self._generator.gen_trajectory()
@@ -23,7 +27,6 @@ class MovingSpriteDataset(Dataset):
         data_dict.rewards = traj.rewards
 
         return data_dict
-
 
 class MovingSpritesGenerator:
     """Base moving sprites data generator class."""
@@ -115,6 +118,7 @@ class DistractorTemplateMovingSpritesGenerator(TemplateMovingSpritesGenerator):
         return shape_idxs
 
 
+
 if __name__ == '__main__':
     import cv2
     from general_utils import make_image_seq_strip
@@ -131,5 +135,3 @@ if __name__ == '__main__':
     traj = gen.gen_trajectory()
     img = make_image_seq_strip([traj.images[None, :, None].repeat(3, axis=2).astype(np.float32)], sep_val=255.0).astype(np.uint8)
     cv2.imwrite("test.png", img[0].transpose(1, 2, 0))
-
-
