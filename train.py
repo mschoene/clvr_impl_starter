@@ -29,21 +29,29 @@ import torch.optim as optim
 
 from models import ImageEncoder, ImageDecoder, AE, Autoencoder
 
+
+def check_requires_grad(model):
+    for name, param in model.named_parameters():
+        print(f"Parameter: {name}, Requires gradient: {param.requires_grad}")
+
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 spec = AttrDict(
-        resolution=64, #64,
+        resolution=16, #64, #64,
         max_seq_len=2, #30,
         max_speed=0.05,      # total image range [0, 1]
         obj_size=0.2,       # size of objects, full images is 1.0
         shapes_per_traj=20,      # number of shapes per trajectory
-        #rewards=[ZeroReward]
-        rewards=[HorPosReward, VertPosReward]
+        rewards=[ZeroReward]
+        #rewards=[HorPosReward, VertPosReward]
     )
 
 
 n_conditioning_frames = 3
 n_prediction_frames = 6 #TODO change to 25 or w/e
-batch_size = 1024
-n_samples = batch_size*200
+batch_size = 512 # 512 #1024
+n_samples = batch_size*1000
 
 
 test_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
@@ -52,11 +60,12 @@ test_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
 dataloader = DataLoader(test_ds, batch_size=batch_size, num_workers=4)
 
 input_channels = 3
-output_size = 64
+#this is the size of the input image and also the size of the latent space
+output_size = spec['resolution']  #64
 
 
-encoder = ImageEncoder(input_channels=3, output_size=64)
-decoder = ImageDecoder(input_channels=64, output_size=64)
+encoder = ImageEncoder(input_channels=3, output_size=output_size)
+decoder = ImageDecoder(input_channels=output_size, output_size=output_size)
 
 # Create an instance of Autoencoder
 autoencoder = AE(encoder, decoder)
@@ -68,18 +77,15 @@ print(model)
 
 
 
-print( summary(model, (3, 64,64)) )
+print( summary(model, (3, output_size,output_size)) )
 loss_fn = nn.MSELoss()
 
 #learning_rate = 0.001
 
-optimizer = optim.RAdam( model.parameters(), betas = (0.9, 0.999), weight_decay=0.001)
+optimizer = optim.RAdam( model.parameters(), betas = (0.9, 0.999)) # , weight_decay=0.001)
 #optimizer = optim.Adam(model.parameters(), lr=0.001)
 #optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.001)  # Adjust the weight decay strength
-
-def check_requires_grad(model):
-    for name, param in model.named_parameters():
-        print(f"Parameter: {name}, Requires gradient: {param.requires_grad}")
+model.to(device)
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -90,18 +96,23 @@ def train_one_epoch(epoch_index, tb_writer):
     running_loss = 0.
     last_loss = 0.
 
+    #counter = 0
     for i_batch, sample_batched in enumerate(dataloader):
         #print("batch size ", i_batch, sample_batched['states'].size(),sample_batched['images'].size())
         #if i_batch == 2:
         #    break
+        #counter += 1
 
         inputs_pre = sample_batched.images[:, 0, ...].squeeze(1)
         labels = sample_batched.images[:, 0, ...].squeeze(1)
 
         inputs = inputs_pre.clone().detach().requires_grad_(True)
         #inputs = torch.tensor(inputs, requires_grad=True )
-        inputs.retain_grad = True
-        inputs.requires_grad = True
+        #inputs.retain_grad = True
+        #inputs.requires_grad = True
+        #print(inputs.shape)
+        inputs = inputs.to(device)
+        labels = labels.to(device)
 
         #print(inputs.shape, labels.shape)
         # zero the parameter gradients
@@ -112,16 +123,13 @@ def train_one_epoch(epoch_index, tb_writer):
         loss = loss_fn(outputs, labels)
 
 
-        #l1_lambda = 0.05  # Adjust the regularization strength
+        #l1_lambda = 0.01  # Adjust the regularization strength
         #l1_loss = 0
         #for param in model.parameters():
         #    l1_loss += torch.norm(param, p=1)
         #loss += l1_lambda * l1_loss
-        
-        
+                
         loss.backward()
-        
-
         # Adjust learning weights
         optimizer.step()
         #print(outputs.grad)
@@ -129,30 +137,20 @@ def train_one_epoch(epoch_index, tb_writer):
         #print(outputs.is_leaf ==True)
         #for p in model.parameters():
         #    print("param grad ", p.grad)
-        #make_dot(outputs, params=dict(reward_predictor.named_parameters()))
         #make_dot(outputs, params=dict(model.named_parameters())).render("graph")
-
-
-                # Check if gradients are being computed for each parameter in the model
-        #for name, param in model.named_parameters():
-        #    print(name, param.grad is not None)
-            
-
-        # Call the function with your model
-        #check_requires_grad(model)
-
 
 
         # Gather data and report
         running_loss += loss.item()
-        if i_batch % 1000 == 999:
-            last_loss = running_loss / float(batch_size) # loss per batch
+        if i_batch % 100 == 99:
+            last_loss = running_loss / 100. # loss per batch
             print('  batch {} loss: {}'.format(i_batch + 1, last_loss))
             #print(' l1 loss ', l1_lambda * l1_loss )
             tb_x = epoch_index * len(dataloader) + i_batch + 1
             tb_writer.add_scalar('Loss/train', last_loss, tb_x)
             running_loss = 0.
 
+    #epoch_loss = running_loss/counter
     return last_loss
 
 
@@ -161,7 +159,7 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 epoch_number = 0
 
-EPOCHS = 15
+EPOCHS = 5
 
 best_vloss = 1_000_000.
 
@@ -177,9 +175,11 @@ for epoch in range(EPOCHS):
     # statistics for batch normalization.
     model.eval()
 
+    counter = 0
     # Disable gradient computation and reduce memory consumption.
     with torch.no_grad():
         for i, vdata in enumerate(dataloader): #validation_loader):
+            counter += 1 
             vinputs, vlabels = vdata.images[:, 0, ...].squeeze(1), vdata.images[:, 0, ...].squeeze(1)
             #print(vinputs.shape, vlabels.shape)
             voutputs = model(vinputs)
@@ -187,7 +187,7 @@ for epoch in range(EPOCHS):
             vloss = loss_fn(voutputs, vlabels)
             running_vloss += vloss
 
-    avg_vloss = running_vloss / (i + 1.)
+    avg_vloss = running_vloss /counter # (i + 1.)
     print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
     # Log the running loss averaged per batch
@@ -235,7 +235,7 @@ for i, vdata  in enumerate(dataloader):
 
     #print(voutputs[None, :-1])
     voutputs = voutputs * 2 - 1
-    print(voutputs)
+    #print(voutputs)
     img = make_image_seq_strip([ ((1+voutputs[None, :])*(255/2.))] ,sep_val=255.0).astype(np.uint8)
     cv2.imwrite("test_output.png", img[0].transpose(1, 2, 0))
     #cv2.imwrite("test_in.png", img[0].transpose( 1, 2, 0))
