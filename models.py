@@ -157,6 +157,7 @@ class ImageDecoder(nn.Module):
         # Add the final convolutional layer to generate the output image
         layers.append(nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1))
         layers.append(nn.Sigmoid())  
+        
 
         return nn.Sequential(*layers)
 
@@ -166,6 +167,8 @@ class ImageDecoder(nn.Module):
         #x = self.conv_layers[-1](x)
         for layer in self.conv_layers:
             x = layer(x)
+
+        x = x* 2 -1.
         #x = self.conv_layers(x)
 #        print("dec 2 ", x.shape)
 
