@@ -185,10 +185,10 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 epoch_number = 0
 
-EPOCHS = 100# 40 #60 #80
+EPOCHS = 1000# 40 #60 #80
 
 #best_vloss = 1_000_000.
-best_vloss = 0.05
+best_vloss = 10000
 
 for epoch in range(EPOCHS):
     print('EPOCH {}:'.format(epoch_number + 1))
@@ -229,12 +229,12 @@ for epoch in range(EPOCHS):
     writer.flush()
 
     # Track best performance, and save the model's state
-    if avg_vloss < best_vloss:
+    if avg_vloss < best_vloss*0.8:
         best_vloss = avg_vloss
         model_path = 'model_{}_{}'.format(timestamp, epoch_number)
         torch.save(model.state_dict(), model_path)
 
-    if  best_vloss < 0.1:
+    if  avg_vloss < 0.01:
         break
 
     epoch_number += 1
@@ -249,7 +249,7 @@ for i, vdata  in enumerate(dataloader):
     # undo this/ (255./2) - 1.0
     #print(vdata.images.shape )
 
-    vinputs, vlabels = vdata.images[:, 0, ...], vdata.images[:, 0, ...].squeeze(1)
+    vinputs, vlabels = vdata.images[:, 0, ...].squeeze(1), vdata.images[:, 0, ...].squeeze(1)
     #vinputs, vlabels = vdata, vdata
     #print(vinputs.shape,vdata.images.shape )
 
@@ -273,7 +273,8 @@ for i, vdata  in enumerate(dataloader):
 
     #cv2.imwrite("test_input_direct.png", vinputs[0] ) #.transpose(1,2,0))
     #cv2.imwrite("test_output_direct.png", voutputs[0]) #.transpose(1,2,0))
-    display = list(voutputs[0]) + list(vinputs[0])
+    display = list(voutputs[0:5]) + list(vinputs[0:5])
+
     display = torchvision.utils.make_grid(display,nrow=2)
     torchvision.utils.save_image(display, "ae_comp.png")
     display = torchvision.transforms.ToPILImage()(display)
