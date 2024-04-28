@@ -73,18 +73,10 @@ autoencoder = AE(encoder, decoder)
 model = autoencoder
 #model = Autoencoder() #test one from geesforgeeks
 
-print(model)
-
-
 
 print( summary(model, (3, output_size,output_size)) )
 loss_fn = nn.MSELoss()
-
-#learning_rate = 0.001
-
 optimizer = optim.RAdam( model.parameters(), betas = (0.9, 0.999)) # , weight_decay=0.001)
-#optimizer = optim.Adam(model.parameters(), lr=0.001)
-#optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.001)  # Adjust the weight decay strength
 model.to(device)
 
 
@@ -161,7 +153,8 @@ epoch_number = 0
 
 EPOCHS = 5
 
-best_vloss = 1_000_000.
+#best_vloss = 1_000_000.
+best_vloss = 0.5
 
 for epoch in range(EPOCHS):
     print('EPOCH {}:'.format(epoch_number + 1))
@@ -201,7 +194,7 @@ for epoch in range(EPOCHS):
     if avg_vloss < best_vloss:
         best_vloss = avg_vloss
         model_path = 'model_{}_{}'.format(timestamp, epoch_number)
-        #torch.save(model.state_dict(), model_path)
+        torch.save(model.state_dict(), model_path)
 
     epoch_number += 1
 
@@ -210,9 +203,6 @@ for epoch in range(EPOCHS):
 
 
 for i, vdata  in enumerate(dataloader):
-    #print((sample.rewards['vertical_position']).shape)
-    #print((sample.states))
-
     #this is the way to adopt the same plotting for the dataset images as for the traj images
     # it's a bit hacky but it works, so it's not stupid :,) also I don't need to change the code in multiple places so it's a win...
     # undo this/ (255./2) - 1.0
@@ -221,24 +211,18 @@ for i, vdata  in enumerate(dataloader):
     vinputs, vlabels = vdata.images[:, 0, ...], vdata.images[:, 0, ...].squeeze(1)
     print(vinputs.shape,vdata.images.shape )
 
+    vinputs = vinputs.to(device)
+
     voutputs = model(vinputs)
     print(type(vinputs),type(vdata.images) )
-
-    voutputs = voutputs.detach().numpy()
-    #vdata_ = (vdata.images).tolist()
-    #voutputs = voutputs.tolist()
-    #print(voutputs)
-    #print(vdata_[0] )
+    vinputs = vinputs.to('cpu')
+    voutputs = voutputs.cpu().detach().numpy()
   
     img = make_image_seq_strip([ ((1+vinputs[None, :])*(255/2.))] ,sep_val=255.0).astype(np.uint8)
     cv2.imwrite("test_input.png", img[0].transpose(1, 2, 0))
 
-    #print(voutputs[None, :-1])
     voutputs = voutputs * 2 - 1
-    #print(voutputs)
     img = make_image_seq_strip([ ((1+voutputs[None, :])*(255/2.))] ,sep_val=255.0).astype(np.uint8)
     cv2.imwrite("test_output.png", img[0].transpose(1, 2, 0))
-    #cv2.imwrite("test_in.png", img[0].transpose( 1, 2, 0))
-    #print("=========================")
     if i ==0:
         break
