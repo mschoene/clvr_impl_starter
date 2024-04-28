@@ -14,8 +14,7 @@ run:
       pip3 install virtualenv
       virtualenv -p $(which python3) ./venv
       source ./venv/bin/activate
-      apt-get install libgl1
-      pip3 install -r requirements.txt
+      apt-get update && apt-get install ffmpeg libsm6 libxext6  -y      pip3 install -r requirements.txt
       python train.py
     workdir: /code
 interactive:
