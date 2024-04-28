@@ -54,7 +54,7 @@ spec = AttrDict(
 n_conditioning_frames = 3
 n_prediction_frames = 6 #TODO change to 25 or w/e
 batch_size = 256 #512 # 512 #1024
-n_samples = batch_size*100
+n_samples = batch_size*500
 
 test_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
 
@@ -224,7 +224,7 @@ for i, vdata  in enumerate(dataloader):
     img = make_image_seq_strip([ ((1+vinputs[None, :])*(255/2.))] ,sep_val=255.0).astype(np.uint8)
     cv2.imwrite("test_input.png", img[0].transpose(1, 2, 0))
 
-    voutputs = voutputs * 2 - 1
+    #voutputs = voutputs * 2 - 1
     img = make_image_seq_strip([ ((1+voutputs[None, :])*(255/2.))] ,sep_val=255.0).astype(np.uint8)
     cv2.imwrite("test_output.png", img[0].transpose(1, 2, 0))
     if i ==0:
