@@ -53,9 +53,8 @@ spec = AttrDict(
 
 n_conditioning_frames = 3
 n_prediction_frames = 6 #TODO change to 25 or w/e
-batch_size = 512 # 512 #1024
-n_samples = batch_size*1000
-
+batch_size = 256 #512 # 512 #1024
+n_samples = batch_size*100
 
 test_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
 
