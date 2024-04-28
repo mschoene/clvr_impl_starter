@@ -1,0 +1,29 @@
+name: MStest
+resources:
+  cluster: cluster-3090 
+  present: gpu-1
+image: quay.io/vessl-ai/torch:2.1.0-cuda12.2-r3
+import:
+  /code/:
+    git:
+      url: https://github.com/mschoene/clvr_impl_starter.git
+      ref: master
+  #/model/: hf://huggingface.co/VESSL/SSD-1B
+run:
+  - command: |-
+      pip3 install virtualenv
+      virtualenv -p $(which python3) ./venv
+      source ./venv/bin/activate
+      apt-get install libgl1
+      pip3 install -r requirements.txt
+      python train.py
+    workdir: /code
+interactive:
+  max_runtime: 24h
+  jupyter:
+    idle_timeout: 120m
+#ports:
+#  - name: streamlit
+#    type: http
+#    port: 80
+

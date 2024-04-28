@@ -37,6 +37,9 @@ def check_requires_grad(model):
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+print("DEVICE IS ", device)
+
+
 spec = AttrDict(
         resolution=16, #64, #64,
         max_seq_len=2, #30,
@@ -75,6 +78,7 @@ model = autoencoder
 
 
 print( summary(model, (3, output_size,output_size)) )
+
 loss_fn = nn.MSELoss()
 optimizer = optim.RAdam( model.parameters(), betas = (0.9, 0.999)) # , weight_decay=0.001)
 model.to(device)

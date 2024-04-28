@@ -5,3 +5,5 @@ gym
 torch
 datasets
 torchviz
+tensorboard
+torchsummary
