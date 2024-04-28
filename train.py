@@ -181,9 +181,9 @@ for epoch in range(EPOCHS):
         for i, vdata in enumerate(dataloader): #validation_loader):
             counter += 1 
             vinputs, vlabels = vdata.images[:, 0, ...].squeeze(1), vdata.images[:, 0, ...].squeeze(1)
-            #print(vinputs.shape, vlabels.shape)
+            vinputs = vinputs.to(device)
+            vlabels = vlabels.to(device)
             voutputs = model(vinputs)
-            #print(voutputs.shape)
             vloss = loss_fn(voutputs, vlabels)
             running_vloss += vloss
 
