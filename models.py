@@ -16,10 +16,10 @@ class ImageEncoder(nn.Module):
         out_channels = 4
         for _ in range(int(math.log2(self.output_size))):
             layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
-            layers.append(nn.BatchNorm2d(out_channels))  # Add BatchNorm layer after Conv2d
+            #layers.append(nn.BatchNorm2d(out_channels))  # Add BatchNorm layer after Conv2d
 
-            #layers.append(nn.ReLU())
-            layers.append(nn.Tanh())
+            layers.append(nn.ReLU())
+            #layers.append(nn.Tanh())
             #layers.append(nn.Dropout2d(self.dropout_prob))  # Add dropout layer
             layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
             in_channels = out_channels
@@ -30,7 +30,8 @@ class ImageEncoder(nn.Module):
         layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
         layers.append(nn.ReLU())
         layers.append(nn.Flatten())
-        layers.append(nn.Linear(out_channels, 64))
+        layers.append(nn.Linear(out_channels,128))
+        layers.append(nn.Linear(128, 64))
         return nn.Sequential(*layers)
     
  #       self.conv_layers = nn.Sequential(
@@ -94,26 +95,27 @@ class ImageDecoder(nn.Module):
         self.output_size = output_size # 3 #this is the output of the decoder = input size into enc = image size
         #self.conv_layers = self._create_decoder_layers()
 
-        self.conv_layers = self._create_decoder_layers()
+        #self.conv_layers = self._create_decoder_layers()
         self.dropout_prob = 0.15
 
-#        self.conv_layers = nn.Sequential(
-#            nn.Linear(64, 64 * 1 * 1),  # Linear layer to map from latent space to 4x4 feature map
-#            nn.ReLU(),
-#            nn.Unflatten(1, (64, 1, 1)),  # Reshape to 1x1 feature map with 64 channels
-#            nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: 
-#            nn.ReLU(),            
-#            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 32, 8, 8]
-#            nn.ReLU(),
-#            nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 16, 16, 16]
-#            nn.ReLU(),
-#            nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 8, 32, 32]
-#            nn.ReLU(),
-#            nn.ConvTranspose2d(8, 4, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 4, 32, 32]
-#            nn.ReLU(),
-#            nn.ConvTranspose2d(4, 3, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 3, 64, 64]
-#            nn.Sigmoid()  # Apply sigmoid activation to ensure output values are in [0, 1]
-#        )
+        self.conv_layers = nn.Sequential(
+            nn.Linear(64, 64 * 1 * 1),  # Linear layer to map from latent space to 4x4 feature map
+            nn.ReLU(),
+            nn.Unflatten(1, (64, 1, 1)),  # Reshape to 1x1 feature map with 64 channels
+            nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: 
+            nn.ReLU(),            
+            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 32, 8, 8]
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 16, 16, 16]
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 8, 32, 32]
+            nn.ReLU(),
+            nn.ConvTranspose2d(8, 4, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 4, 32, 32]
+            nn.ReLU(),
+            nn.ConvTranspose2d(4, 1, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 3, 64, 64]
+            #nn.Sigmoid()  # Apply sigmoid activation to ensure output values are in [0, 1]
+            nn.Tanh()  # Apply sigmoid activation to ensure output values are in [0, 1]
+        )
 
 #        self.conv_layers = nn.Sequential(
 #            nn.Unflatten(1, (self.input_channels, 1, 1)), # Reshape to 1x1 with input_channels channels #nn.Unflatten(dim=1, unflattened_size=(64, 1, 1)),
@@ -137,32 +139,32 @@ class ImageDecoder(nn.Module):
 #            nn.ConvTranspose2d(4, 3, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1)),
 #            nn.Sigmoid()
 #        )
+##
+#    def _create_decoder_layers(self):
+#        layers = []
+#        in_channels = self.input_channels  # Start with the input size of the decoder
+#        out_channels = 64  # Initial number of output channels
+#        
+#        # Add a linear layer to translate the input latent space into 1x1 feature map with 64 channels
+#        #layers.append(nn.Linear(in_channels, 64))
+#        #layers.append(nn.ReLU())
+#        layers.append(nn.Unflatten(1, (self.input_channels, 1, 1)) ) # Reshape to 1x1 with input_channels channels
+#        layers.append(nn.ReLU())
+#        #layers.append(nn.Tanh())
+#        
+#        while out_channels > 3:  # Adjusted condition for decoder
+#            layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1))
+#            #layers.append(nn.ReLU())
+#            layers.append(nn.Tanh())
+#            in_channels = out_channels  # Set the number of input channels for the next layer
+#            out_channels //= 2  # Halve the number of channels
+#        
+#        # Add the final convolutional layer to generate the output image
+#        layers.append(nn.ConvTranspose2d(in_channels, 1, kernel_size=4, stride=2, padding=1))
+#        #layers.append(nn.Sigmoid())  
+#        layers.append(nn.Tanh() )
 #
-    def _create_decoder_layers(self):
-        layers = []
-        in_channels = self.input_channels  # Start with the input size of the decoder
-        out_channels = 64  # Initial number of output channels
-        
-        # Add a linear layer to translate the input latent space into 1x1 feature map with 64 channels
-        #layers.append(nn.Linear(in_channels, 64))
-        #layers.append(nn.ReLU())
-        layers.append(nn.Unflatten(1, (self.input_channels, 1, 1)) ) # Reshape to 1x1 with input_channels channels
-        #layers.append(nn.ReLU())
-        layers.append(nn.Tanh())
-        
-        while out_channels > 3:  # Adjusted condition for decoder
-            layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1))
-            #layers.append(nn.ReLU())
-            layers.append(nn.Tanh())
-            in_channels = out_channels  # Set the number of input channels for the next layer
-            out_channels //= 2  # Halve the number of channels
-        
-        # Add the final convolutional layer to generate the output image
-        layers.append(nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1))
-        #layers.append(nn.Sigmoid())  
-        layers.append(nn.Tanh() )
-
-        return nn.Sequential(*layers)
+#        return nn.Sequential(*layers)
 
     def forward(self, x):
         #x = self.conv_layers[:-1](x)
@@ -211,36 +213,65 @@ class Autoencoder(nn.Module):
         super(Autoencoder, self).__init__()
             
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
+            
+            nn.Conv2d(1, 4, kernel_size=3, stride=2, padding=1), #1x64x64 -> 4x32x32
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(16, 8, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(4, 8, kernel_size=3, stride=1, padding=1), # to 8x 16 x 16
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Flatten()  
+            
+
+            #nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
+            #nn.ReLU(),
+            #nn.MaxPool2d(kernel_size=2, stride=2),
+            #nn.Conv2d(16, 8, kernel_size=3, stride=1, padding=1),
+            #nn.ReLU(),
+            #nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Flatten(),
+            nn.Linear(8*8*8 , 64) 
         )
 
         self.decoder = nn.Sequential(
-            nn.Unflatten(1, (8, 64 // 4, 64 // 4)),  # Unflatten the input to the decoder
-            nn.ConvTranspose2d(8, 16, 
-                               kernel_size=3, 
-                               stride=2, 
-                               padding=1, 
-                               output_padding=1),
+            nn.Unflatten(1, (64, 1, 1)),  # Unflatten the input tensor
+            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),  # Output size: [32, 2, 2]
             nn.ReLU(),
-            nn.ConvTranspose2d(16, 3, 
-                               kernel_size=3, 
-                               stride=2, 
-                               padding=1, 
-                               output_padding=1),
-            nn.Sigmoid()
+            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),  # Output size: [16, 4, 4]
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 8, kernel_size=4, stride=2, padding=1),   # Output size: [8, 8, 8]
+            nn.ReLU(),
+            nn.ConvTranspose2d(8, 4, kernel_size=4, stride=2, padding=1),    # Output size: [4, 16, 16]
+            nn.ReLU(),
+            nn.ConvTranspose2d(4, 1, kernel_size=4, stride=2, padding=1),    # Output size: [1, 32, 32]
+            nn.ReLU(),
+            nn.ConvTranspose2d(1, 1, kernel_size=4, stride=2, padding=1),    # Output size: [1, 64, 64]
+            nn.Tanh()
         )
 
-        
+
     def forward(self, x):
+        #print("init shape ", x.shape)
         x = self.encoder(x)
+        #print(x.shape)
         x = self.decoder(x)
         return x
  
  
+ 
 
+#3 layer MLP, takes an input output and hidden size
+class MLP3(nn.Module):
+    def __init__(self,input_size, output_size, hidden_size=32):
+        super(MLP3, self).__init__()
+            
+        self.mlp_layers = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),            
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size),
+        )
+   
+    def forward(self, x):
+        return self.mlp_layers(x)
+ 

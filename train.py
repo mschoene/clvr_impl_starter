@@ -29,6 +29,7 @@ import torch.optim as optim
 
 from models import ImageEncoder, ImageDecoder, AE, Autoencoder #, AE_test
 
+import torchvision
 
 torch.backends.cudnn.enabled = False
 
@@ -44,20 +45,31 @@ print("DEVICE IS ", device)
 
 spec = AttrDict(
         resolution=64,
-        max_seq_len=2, #30,
+        max_seq_len=1, #30,
         max_speed=0.05,      # total image range [0, 1]
         obj_size=0.2,       # size of objects, full images is 1.0
-        shapes_per_traj=50,      # number of shapes per trajectory
+        shapes_per_traj=4,      # number of shapes per trajectory
         rewards=[ZeroReward]
         #rewards=[HorPosReward, VertPosReward]
     )
 
 
+#gen = DistractorTemplateMovingSpritesGenerator(spec)
+#traj = gen.gen_trajectory()
+#overfitting_image = traj.images[:, None].repeat(3, axis=1).astype(np.float32) / (255./2) - 1.0
+
+#img = make_image_seq_strip([traj.images[None, :, None].repeat(3, axis=2).astype(np.float32)], sep_val=255.0).astype(np.uint8)
+#cv2.imwrite("test.png", img[0].transpose(1, 2, 0))
+
 n_conditioning_frames = 3
 n_prediction_frames = 6 #TODO change to 25 or w/e
-batch_size = 40 # 16 #256 #512 # 512 #1024
+batch_size = 1024 # 16 #256 #512 # 512 #1024
 n_samples = batch_size*100
 
+
+input_channels = 1 # 3
+#this is the size of the input image and also the size of the latent space
+output_size = spec['resolution']  #64
 
 train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
 valid_ds = MovingSpriteDataset(spec=spec, num_samples=batch_size*4)
@@ -65,13 +77,9 @@ valid_ds = MovingSpriteDataset(spec=spec, num_samples=batch_size*4)
 
 dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=4)
 dataloader_valid = DataLoader(valid_ds, batch_size=batch_size, num_workers=4)
+#dataloader = DataLoader(overfitting_image, 1)
 
-input_channels = 3
-#this is the size of the input image and also the size of the latent space
-output_size = spec['resolution']  #64
-
-
-encoder = ImageEncoder(input_channels=3, output_size=output_size)
+encoder = ImageEncoder(input_channels=input_channels, output_size=output_size)
 decoder = ImageDecoder(input_channels=output_size, output_size=output_size)
 # Create an instance of Autoencoder
 autoencoder = AE(encoder, decoder)
@@ -85,13 +93,14 @@ print(model)
 loss_fn = nn.MSELoss()
 
 #optimizer = optim.RAdam( model.parameters(), betas = (0.9, 0.999)) # , weight_decay=0.001)
-optimizer = optim.AdamW( model.parameters(), lr=0.00001) # , weight_decay=0.001)
+optimizer = optim.AdamW( model.parameters(), lr=0.0001) #, weight_decay=0.001)
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model.to(device)
 
-print( summary(model, (3, output_size,output_size)) )
+print( summary(model, (1, output_size,output_size)) )
+
 
 #TODO put in an epoch loop
 def train_one_epoch(epoch_index, tb_writer):
@@ -106,9 +115,17 @@ def train_one_epoch(epoch_index, tb_writer):
         #if i_batch == 2:
         #    break
         #counter += 1
+        #print(sample_batched.shape)
 
+        #inputs_pre = sample_batched
+        #labels = sample_batched
+        #print(sample_batched)
         inputs_pre = sample_batched.images[:, 0, ...].squeeze(1)
         labels = sample_batched.images[:, 0, ...].squeeze(1)
+
+        inputs_pre = torchvision.transforms.Grayscale(num_output_channels=1)(inputs_pre)
+        labels = torchvision.transforms.Grayscale(num_output_channels=1)(labels)
+        #print(inputs_pre.shape)
 
         inputs = inputs_pre.clone().detach().requires_grad_(True)
         #inputs = torch.tensor(inputs, requires_grad=True )
@@ -168,7 +185,7 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 epoch_number = 0
 
-EPOCHS = 80
+EPOCHS = 100# 40 #60 #80
 
 #best_vloss = 1_000_000.
 best_vloss = 0.05
@@ -193,6 +210,8 @@ for epoch in range(EPOCHS):
             vinputs, vlabels = vdata.images[:, 0, ...].squeeze(1), vdata.images[:, 0, ...].squeeze(1)
             vinputs = vinputs.to(device)
             vlabels = vlabels.to(device)
+            vinputs = torchvision.transforms.Grayscale(num_output_channels=1)(vinputs)
+            vlabels = torchvision.transforms.Grayscale(num_output_channels=1)(vlabels)
             #vlabels = (vlabels+1)/2
             #vinputs = (vinputs+1)/2
             voutputs = model(vinputs)
@@ -215,6 +234,9 @@ for epoch in range(EPOCHS):
         model_path = 'model_{}_{}'.format(timestamp, epoch_number)
         torch.save(model.state_dict(), model_path)
 
+    if  best_vloss < 0.1:
+        break
+
     epoch_number += 1
 
 
@@ -225,26 +247,37 @@ for i, vdata  in enumerate(dataloader):
     #this is the way to adopt the same plotting for the dataset images as for the traj images
     # it's a bit hacky but it works, so it's not stupid :,) also I don't need to change the code in multiple places so it's a win...
     # undo this/ (255./2) - 1.0
-    print(vdata.images.shape )
+    #print(vdata.images.shape )
 
     vinputs, vlabels = vdata.images[:, 0, ...], vdata.images[:, 0, ...].squeeze(1)
-    print(vinputs.shape,vdata.images.shape )
+    #vinputs, vlabels = vdata, vdata
+    #print(vinputs.shape,vdata.images.shape )
 
     vinputs = vinputs.to(device)
+    vinputs = torchvision.transforms.Grayscale(num_output_channels=1)(vinputs)
 
     voutputs = model(vinputs)
-    print(type(vinputs),type(vdata.images) )
+    #print(type(vinputs),type(vdata.images) )
     vinputs = vinputs.to('cpu')
-    voutputs = voutputs.cpu().detach().numpy()
+    voutputs = voutputs.cpu().detach()#.numpy()
   
-    img = make_image_seq_strip([ ((1+vinputs[None, :])*(255/2.))] ,sep_val=255.0)#.astype(np.uint8)
-    cv2.imwrite("test_input.png", img[0].transpose(1, 2, 0))
-    print(voutputs[0], vinputs[0])
+    voutputs = torchvision.transforms.Grayscale(num_output_channels=1)(voutputs)
 
-    voutputs = voutputs * 2 - 1
-    img = make_image_seq_strip([ ((1+voutputs[None, :])*(255/2.))] ,sep_val=255.0)#.astype(np.uint8)
-    cv2.imwrite("test_output.png", img[0].transpose(1, 2, 0))
+    #img = make_image_seq_strip([ ((1+vinputs[None, :])*(255/2.))] ,sep_val=255.0)#.astype(np.uint8)
+    #cv2.imwrite("test_input.png", img[0].transpose(1, 2, 0))
+    #print(voutputs[0]) #, vinputs[0])
 
-    cv2.imwrite("test_voutdirect.png", voutputs[0,...].transpose(1,2,0))
+    #voutputs = voutputs * 2 - 1
+    #img = make_image_seq_strip([ ((1+voutputs[None, :])*(255/2.))] ,sep_val=255.0)#.astype(np.uint8)
+    #cv2.imwrite("test_output.png", img[0].transpose(1, 2, 0))
+
+    #cv2.imwrite("test_input_direct.png", vinputs[0] ) #.transpose(1,2,0))
+    #cv2.imwrite("test_output_direct.png", voutputs[0]) #.transpose(1,2,0))
+    display = list(voutputs[0]) + list(vinputs[0])
+    display = torchvision.utils.make_grid(display,nrow=2)
+    torchvision.utils.save_image(display, "ae_comp.png")
+    display = torchvision.transforms.ToPILImage()(display)
+    display = display.save("display.jpg") 
+    #display.show()
     if i ==0:
         break
