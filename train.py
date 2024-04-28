@@ -27,8 +27,10 @@ from torchsummary import summary
 
 import torch.optim as optim
 
-from models import ImageEncoder, ImageDecoder, AE, Autoencoder
+from models import ImageEncoder, ImageDecoder, AE, Autoencoder #, AE_test
 
+
+torch.backends.cudnn.enabled = False
 
 def check_requires_grad(model):
     for name, param in model.named_parameters():
@@ -41,11 +43,11 @@ print("DEVICE IS ", device)
 
 
 spec = AttrDict(
-        resolution=16, #64, #64,
+        resolution=64,
         max_seq_len=2, #30,
         max_speed=0.05,      # total image range [0, 1]
         obj_size=0.2,       # size of objects, full images is 1.0
-        shapes_per_traj=20,      # number of shapes per trajectory
+        shapes_per_traj=50,      # number of shapes per trajectory
         rewards=[ZeroReward]
         #rewards=[HorPosReward, VertPosReward]
     )
@@ -53,13 +55,16 @@ spec = AttrDict(
 
 n_conditioning_frames = 3
 n_prediction_frames = 6 #TODO change to 25 or w/e
-batch_size = 256 #512 # 512 #1024
-n_samples = batch_size*500
-
-test_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
+batch_size = 40 # 16 #256 #512 # 512 #1024
+n_samples = batch_size*100
 
 
-dataloader = DataLoader(test_ds, batch_size=batch_size, num_workers=4)
+train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
+valid_ds = MovingSpriteDataset(spec=spec, num_samples=batch_size*4)
+
+
+dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=4)
+dataloader_valid = DataLoader(valid_ds, batch_size=batch_size, num_workers=4)
 
 input_channels = 3
 #this is the size of the input image and also the size of the latent space
@@ -68,28 +73,32 @@ output_size = spec['resolution']  #64
 
 encoder = ImageEncoder(input_channels=3, output_size=output_size)
 decoder = ImageDecoder(input_channels=output_size, output_size=output_size)
-
 # Create an instance of Autoencoder
 autoencoder = AE(encoder, decoder)
 
 model = autoencoder
+
+#model = AE_test()
 #model = Autoencoder() #test one from geesforgeeks
-
-
-print( summary(model, (3, output_size,output_size)) )
+print(model)
 
 loss_fn = nn.MSELoss()
-optimizer = optim.RAdam( model.parameters(), betas = (0.9, 0.999)) # , weight_decay=0.001)
-model.to(device)
+
+#optimizer = optim.RAdam( model.parameters(), betas = (0.9, 0.999)) # , weight_decay=0.001)
+optimizer = optim.AdamW( model.parameters(), lr=0.00001) # , weight_decay=0.001)
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model.to(device)
 
+print( summary(model, (3, output_size,output_size)) )
+
 #TODO put in an epoch loop
 def train_one_epoch(epoch_index, tb_writer):
     running_loss = 0.
     last_loss = 0.
+
+    model.train()
 
     #counter = 0
     for i_batch, sample_batched in enumerate(dataloader):
@@ -108,13 +117,16 @@ def train_one_epoch(epoch_index, tb_writer):
         #print(inputs.shape)
         inputs = inputs.to(device)
         labels = labels.to(device)
-
+        #labels = (labels+1)/2
+        #inputs = (inputs+1)/2
+        
         #print(inputs.shape, labels.shape)
         # zero the parameter gradients
         optimizer.zero_grad()
 
         outputs = model(inputs)
 
+        #print(outputs[0][1][5], labels[0][1][5])
         loss = loss_fn(outputs, labels)
 
 
@@ -138,6 +150,8 @@ def train_one_epoch(epoch_index, tb_writer):
         # Gather data and report
         running_loss += loss.item()
         if i_batch % 100 == 99:
+            print(inputs[0][0][5][4], outputs[0][0][5][4])
+            print(inputs[0][0][4][5], outputs[0][0][4][5])
             last_loss = running_loss / 100. # loss per batch
             print('  batch {} loss: {}'.format(i_batch + 1, last_loss))
             #print(' l1 loss ', l1_lambda * l1_loss )
@@ -154,10 +168,10 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
 epoch_number = 0
 
-EPOCHS = 5
+EPOCHS = 80
 
 #best_vloss = 1_000_000.
-best_vloss = 0.5
+best_vloss = 0.05
 
 for epoch in range(EPOCHS):
     print('EPOCH {}:'.format(epoch_number + 1))
@@ -174,11 +188,13 @@ for epoch in range(EPOCHS):
     counter = 0
     # Disable gradient computation and reduce memory consumption.
     with torch.no_grad():
-        for i, vdata in enumerate(dataloader): #validation_loader):
+        for i, vdata in enumerate(dataloader_valid): #validation_loader):
             counter += 1 
             vinputs, vlabels = vdata.images[:, 0, ...].squeeze(1), vdata.images[:, 0, ...].squeeze(1)
             vinputs = vinputs.to(device)
             vlabels = vlabels.to(device)
+            #vlabels = (vlabels+1)/2
+            #vinputs = (vinputs+1)/2
             voutputs = model(vinputs)
             vloss = loss_fn(voutputs, vlabels)
             running_vloss += vloss
@@ -221,11 +237,14 @@ for i, vdata  in enumerate(dataloader):
     vinputs = vinputs.to('cpu')
     voutputs = voutputs.cpu().detach().numpy()
   
-    img = make_image_seq_strip([ ((1+vinputs[None, :])*(255/2.))] ,sep_val=255.0).astype(np.uint8)
+    img = make_image_seq_strip([ ((1+vinputs[None, :])*(255/2.))] ,sep_val=255.0)#.astype(np.uint8)
     cv2.imwrite("test_input.png", img[0].transpose(1, 2, 0))
+    print(voutputs[0], vinputs[0])
 
-    #voutputs = voutputs * 2 - 1
-    img = make_image_seq_strip([ ((1+voutputs[None, :])*(255/2.))] ,sep_val=255.0).astype(np.uint8)
+    voutputs = voutputs * 2 - 1
+    img = make_image_seq_strip([ ((1+voutputs[None, :])*(255/2.))] ,sep_val=255.0)#.astype(np.uint8)
     cv2.imwrite("test_output.png", img[0].transpose(1, 2, 0))
+
+    cv2.imwrite("test_voutdirect.png", voutputs[0,...].transpose(1,2,0))
     if i ==0:
         break
