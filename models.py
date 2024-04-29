@@ -7,7 +7,7 @@ class ImageEncoder(nn.Module):
         super(ImageEncoder, self).__init__()
         self.input_channels = input_channels
         self.output_size = output_size
-        self.dropout_prob = 0.0
+        self.dropout_prob = 0.15
         self.conv_layers = self._create_conf_layers()
 
     def _create_conf_layers(self):
@@ -16,10 +16,8 @@ class ImageEncoder(nn.Module):
         out_channels = 4
         for _ in range(int(math.log2(self.output_size))):
             layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
-            #layers.append(nn.BatchNorm2d(out_channels))  # Add BatchNorm layer after Conv2d
-
+            layers.append(nn.BatchNorm2d(out_channels))  # Add BatchNorm layer after Conv2d
             layers.append(nn.ReLU())
-            #layers.append(nn.Tanh())
             #layers.append(nn.Dropout2d(self.dropout_prob))  # Add dropout layer
             layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
             in_channels = out_channels
@@ -28,9 +26,12 @@ class ImageEncoder(nn.Module):
         out_channels /= 2
         out_channels = int(out_channels)
         layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
+        layers.append(nn.BatchNorm2d(out_channels))  # Add BatchNorm layer after Conv2d
         layers.append(nn.ReLU())
         layers.append(nn.Flatten())
         layers.append(nn.Linear(out_channels,128))
+        layers.append(nn.BatchNorm1d(128))
+        layers.append(nn.ReLU())
         layers.append(nn.Linear(128, 64))
         return nn.Sequential(*layers)
     
@@ -71,21 +72,6 @@ class ImageEncoder(nn.Module):
 #        layers.append(nn.Linear(int(out_channels), self.output_size) )
 #        return nn.Sequential(*layers)
 #
-#
-#    def forward(self, x):
-#        for layer in self.conv_layers[:-1]:
-#            x = layer(x)
-#            #x = self.batchnorm(x) 
-#            x = self.dropout(x)
-#
-#        #x = self.conv_layers[:-1](x)
-#        #print("first " , x.shape)
-#        x = x.view(x.size(0), -1)  # Flatten to 1D tensor
-#        #print("sec " , x.shape)
-#
-#        x = self.conv_layers[-1](x)
-#        #print("third  " ,x.shape)
-#        return x
 
 
 class ImageDecoder(nn.Module):
@@ -99,16 +85,24 @@ class ImageDecoder(nn.Module):
         self.dropout_prob = 0.15
 
         self.conv_layers = nn.Sequential(
+            nn.Linear(64, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
             nn.Linear(64, 64 * 1 * 1),  # Linear layer to map from latent space to 4x4 feature map
+            nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Unflatten(1, (64, 1, 1)),  # Reshape to 1x1 feature map with 64 channels
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: 
+            nn.BatchNorm2d(64),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),            
             nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 32, 8, 8]
+            nn.BatchNorm2d(32),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 16, 16, 16]
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 8, 32, 32]
+            nn.BatchNorm2d(8),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.ConvTranspose2d(8, 4, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 4, 32, 32]
             nn.ReLU(),
@@ -150,7 +144,6 @@ class ImageDecoder(nn.Module):
 #        #layers.append(nn.ReLU())
 #        layers.append(nn.Unflatten(1, (self.input_channels, 1, 1)) ) # Reshape to 1x1 with input_channels channels
 #        layers.append(nn.ReLU())
-#        #layers.append(nn.Tanh())
 #        
 #        while out_channels > 3:  # Adjusted condition for decoder
 #            layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1))
@@ -167,17 +160,8 @@ class ImageDecoder(nn.Module):
 #        return nn.Sequential(*layers)
 
     def forward(self, x):
-        #x = self.conv_layers[:-1](x)
-        #x = x.view(x.size(0), -1)  # Flatten to 1D tensor
-        #x = self.conv_layers[-1](x)
         for layer in self.conv_layers:
             x = layer(x)
-
-        #x = x* 2 -1 #to map to -1 1 range
-        #x = self.conv_layers(x)
-#        print("dec 2 ", x.shape)
-
-        #print("dec 3 ", x)
         return x
 
 
