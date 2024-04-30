@@ -77,19 +77,12 @@ class ImageEncoder(nn.Module):
 class ImageDecoder(nn.Module):
     def __init__(self, input_channels, output_size):
         super(ImageDecoder, self).__init__()
-        self.input_channels = input_channels  #64 # this is the laten space size
-        self.output_size = output_size # 3 #this is the output of the decoder = input size into enc = image size
-        #self.conv_layers = self._create_decoder_layers()
-
-        #self.conv_layers = self._create_decoder_layers()
-        self.dropout_prob = 0.15
+        self.input_channels = input_channels  
+        self.output_size = output_size 
 
         self.conv_layers = nn.Sequential(
             nn.Linear(64, 64),
             nn.BatchNorm1d(64),
-            #nn.ReLU(),
-            #nn.Linear(64, 64 * 1 * 1),  # Linear layer to map from latent space to 4x4 feature map
-            #nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Unflatten(1, (64, 1, 1)),  # Reshape to 1x1 feature map with 64 channels
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: 
@@ -107,44 +100,22 @@ class ImageDecoder(nn.Module):
             nn.ConvTranspose2d(8, 4, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 4, 32, 32]
             nn.ReLU(),
             nn.ConvTranspose2d(4, 1, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 3, 64, 64]
-            #nn.Sigmoid()  # Apply sigmoid activation to ensure output values are in [0, 1]
             nn.Tanh()  # Apply sigmoid activation to ensure output values are in [0, 1]
         )
-
-#        self.conv_layers = nn.Sequential(
-#            nn.Unflatten(1, (self.input_channels, 1, 1)), # Reshape to 1x1 with input_channels channels #nn.Unflatten(dim=1, unflattened_size=(64, 1, 1)),
-#            nn.ReLU(),
-#            #nn.ConvTranspose2d(64, 64, kernel_size=4, stride=1, padding=0),
-#            nn.ConvTranspose2d(64, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1)),            
-#            nn.ReLU(),
-#            nn.Dropout2d(self.dropout_prob),  # Add dropout layer
-#            nn.ConvTranspose2d(64, 32, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1)),
-#            nn.ReLU(),
-#            nn.Dropout2d(self.dropout_prob),  # Add dropout layer
-#            nn.ConvTranspose2d(32, 16, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1)),
-#            nn.ReLU(),
-#            nn.Dropout2d(self.dropout_prob),  # Add dropout layer
-#            nn.ConvTranspose2d(16, 8, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1)),
-#            nn.ReLU(),
-#            nn.Dropout2d(self.dropout_prob),  # Add dropout layer
-#            nn.ConvTranspose2d(8, 4, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1)),
-#            nn.ReLU(),
-#            nn.Dropout2d(self.dropout_prob),  # Add dropout layer
-#            nn.ConvTranspose2d(4, 3, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1)),
-#            nn.Sigmoid()
-#        )
+    def forward(self, x):
+        for layer in self.conv_layers:
+            x = layer(x)
+        return x
 ##
 #    def _create_decoder_layers(self):
 #        layers = []
 #        in_channels = self.input_channels  # Start with the input size of the decoder
 #        out_channels = 64  # Initial number of output channels
-#        
 #        # Add a linear layer to translate the input latent space into 1x1 feature map with 64 channels
 #        #layers.append(nn.Linear(in_channels, 64))
 #        #layers.append(nn.ReLU())
 #        layers.append(nn.Unflatten(1, (self.input_channels, 1, 1)) ) # Reshape to 1x1 with input_channels channels
 #        layers.append(nn.ReLU())
-#        
 #        while out_channels > 3:  # Adjusted condition for decoder
 #            layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1))
 #            #layers.append(nn.ReLU())
@@ -156,13 +127,9 @@ class ImageDecoder(nn.Module):
 #        layers.append(nn.ConvTranspose2d(in_channels, 1, kernel_size=4, stride=2, padding=1))
 #        #layers.append(nn.Sigmoid())  
 #        layers.append(nn.Tanh() )
-#
 #        return nn.Sequential(*layers)
 
-    def forward(self, x):
-        for layer in self.conv_layers:
-            x = layer(x)
-        return x
+
 
 
 class AE(nn.Module):
@@ -176,9 +143,6 @@ class AE(nn.Module):
         latent_space = self.encoder(x)
         # Decode the latent space representation
         reconstructed_image = self.decoder(latent_space)
-        #reconstructed_image = torch.sigmoid(reconstructed_image)
-        # Apply thresholding to make the values either -1 or 1
-        #reconstructed_image = torch.where(reconstructed_image > 0.5, torch.tensor(1.0), torch.tensor(-1.0))
         return reconstructed_image
     
  
@@ -187,7 +151,6 @@ class AE(nn.Module):
 class MLP3(nn.Module):
     def __init__(self,input_size, output_size, hidden_size=32):
         super(MLP3, self).__init__()
-            
         self.mlp_layers = nn.Sequential(
             nn.Linear(input_size, hidden_size),
             nn.BatchNorm1d(hidden_size),
@@ -197,20 +160,13 @@ class MLP3(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_size, output_size),
         )
-   
     def forward(self, x):
         return self.mlp_layers(x)
  
 
-
-n_output_steps = 5
-lstm_output_size = 32
-n_layers_lstm = 1
-
-
-class RewardPredictor(nn.Module):
-    def __init__(self, input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=32, n_layers_lstm=1, hidden_size=32):
-        super(RewardPredictor, self).__init__()
+class Predictor(nn.Module):
+    def __init__(self, input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=64, n_layers_lstm=1, hidden_size=32):
+        super(Predictor, self).__init__()
 
         self.lstm_output_size = lstm_output_size
         self.n_layers_lstm = n_layers_lstm
@@ -223,12 +179,6 @@ class RewardPredictor(nn.Module):
         
         self.mlp_enc = nn.Sequential(
             MLP3(output_size*n_cond_frames, output_size=self.lstm_output_size),
-        )        
-        
-        #TODO one per time step and reward head, loop in forward?
-        self.mlp_head1 = nn.Sequential(
-            MLP3(lstm_output_size, output_size=1),
-            nn.Sigmoid()
         )
 
     def forward(self, x):
@@ -251,8 +201,8 @@ class RewardPredictor(nn.Module):
         #print("mlp size ", mlp_output.shape)
         mlp_output = mlp_output.unsqueeze(1) #TODO check 
 
-        h0 = torch.zeros(n_layers_lstm, self.batch_size, lstm_output_size) # Initial hidden state
-        c0 = torch.zeros(n_layers_lstm, self.batch_size, lstm_output_size) # Initial cell state
+        h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size) # Initial hidden state
+        c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size) # Initial cell state
 
         #print (output_sequence.shape)
         #print(output_sequence[:, 1, :].shape)
@@ -261,30 +211,58 @@ class RewardPredictor(nn.Module):
         outputs_list = []
         input_t = mlp_output
 
-
-        #print("mlp still leaf ", mlp_output.is_leaf) #, mlp_output.grad )
-        #print(mlp_output.size())
         for i_step in range(self.n_pred_frames):
-            #output, (h0, c0)  = self.lstm(mlp_output, (h0, c0))
-            #print("output itself is leaf ", outputs.is_leaf)
-            #print(output)
-            #output_sequence.append(output)
-
             lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
-
-            #reward predition head 1 #TODO add others/make it a larger tensor of dimension n_reward_heads
-            output_t = self.mlp_head1(h0[-1]) 
-
-            outputs_list.append(output_t.unsqueeze(1))
+            outputs_list.append(h0[-1].unsqueeze(1))
             #without teacher forcign #TODO check if teacher forcing is nec.
             input_t = lstm_outstep
-            #print("lstm output size ", lstm_outstep.shape)
-            # Update input for next prediction (use predicted output)
-            #input_t = output_t#.unsqueeze(1)
 
-        # Concatenate predicted outputs along the sequence dimension
-        outputs = torch.cat(outputs_list, dim=1).squeeze()
-        #outputs.squeeze()
-        #outputs.retain_grad()
-        #print(outputs.grad)
+        # Concatenate predicted outputs along the sequence dimension = [nb, >ns<]
+        #outputs = torch.cat(outputs_list, dim=1).squeeze()
+        outputs = torch.stack(outputs_list, dim=1).squeeze(2)
         return outputs
+
+
+class RewardPredictor(nn.Module):
+    def __init__(self, n_pred_frames=25, n_heads=4, lstm_output_size=64 ):
+        super(RewardPredictor, self).__init__()
+        self.n_pred_frames = n_pred_frames
+        #self.lstm_out = lstm_out
+        self.n_heads = n_heads
+        self.heads = nn.ModuleList([  nn.Sequential(MLP3(lstm_output_size, output_size=1), nn.Sigmoid()) for _ in range(self.n_heads)  ])
+
+    def forward(self, x):
+
+        batch_size, n_frames, *other_dims = x.size()
+        outputs_list = []
+        #for i_step in range(self.n_pred_frames):
+        for frame_idx in range(n_frames):
+            frame_output = []
+            for head_idx in range(self.n_heads):
+                head_output = self.heads[head_idx](x[:, frame_idx, ...])
+                frame_output.append(head_output)
+            outputs_list.append(torch.stack(frame_output, dim=1))  # Shape: (batch_size, n_heads, ...)   
+        outputs = torch.stack(outputs_list, dim=1).squeeze()  # Shape: (batch_size, n_frames, n_heads, ...)
+
+        return outputs
+    
+
+class CNN(nn.Module):
+    def __init__(self, input_channels, output_channels, kernel_size, stride): 
+        super(CNN, self).__init__()
+        self.layer1 = nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride)
+        self.layer2 = nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride)
+        self.layer3 = nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride)
+        self.fc1 = nn.Linear(16*(16-1)*3, 64)  #channel-1 xchannel x n_kernels
+        self.fc2 = nn.Linear(64, 64) 
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = F.relu(self.layer1(x))
+        x = F.relu(self.layer2(x))
+        x = F.relu(self.layer3(x))
+        #Flatten
+        x = x.view(x.size(0), -1) 
+        x = self.fc1(x)
+        x = self.fc2(x)
+        return x

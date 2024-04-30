@@ -27,12 +27,11 @@ from torchsummary import summary
 
 import torch.optim as optim
 
-from models import ImageEncoder, ImageDecoder, AE, RewardPredictor
+from models import ImageEncoder, ImageDecoder, RewardPredictor, Predictor
 
 #from torchvision import transform, transforms
 from torchvision.transforms import v2
 import torchvision
-
 
 torch.backends.cudnn.enabled = False
 
@@ -90,15 +89,15 @@ dataloader_valid = DataLoader(valid_ds, batch_size=batch_size, num_workers=2)
 encoder = ImageEncoder(input_channels=input_channels, output_size=output_size)
 decoder = ImageDecoder(input_channels=output_size, output_size=output_size)
 # Create an instance of Autoencoder
-autoencoder = AE(encoder, decoder)
+#autoencoder = AE(encoder, decoder)
 
 
 
 #model = autoencoder
 #    def __init__(self, input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=32, n_layers_lstm=1, hidden_size=32):
 
-reward_predictor = RewardPredictor(input_channels, output_size, batch_size)
-
+predictor = Predictor(input_channels, output_size, batch_size)
+reward_predictor = RewardPredictor(n_pred_frames=25, n_heads=1, lstm_output_size=64)
 
 print(reward_predictor)
 
@@ -106,12 +105,12 @@ loss_fn = nn.MSELoss()
 loss_fn_decoder = nn.MSELoss()
 loss_fn_repr = nn.MSELoss()
 
-optimizer_repr = optim.RAdam( reward_predictor.parameters(), betas = (0.9, 0.999))
+optimizer_repr = optim.RAdam( list(predictor.parameters()) + list(reward_predictor.parameters()), betas = (0.9, 0.999))
 optimizer_deco = optim.RAdam( decoder.parameters(), betas = (0.9, 0.999))
-
-
 reward_predictor.to(device)
-autoencoder.to(device)
+predictor.to(device)
+reward_predictor.to(device)
+decoder.to(device)
 
 #print( summary(reward_predictor, (input_channels, output_size, batch_size)) )
 # Initializing in a separate cell so we can easily add more epochs to the same run
@@ -144,6 +143,7 @@ def train_one_epoch(epoch_index, tb_writer):
         #limit the labels to the prediction frames only
         labels = labels[:, n_conditioning_frames:n_conditioning_frames + n_prediction_frames]
 
+        #reshaped_tensor = tensor.view(nb * nf, nc)
 
 
         inputs = inputs_pre.clone().detach().requires_grad_(True)
@@ -158,8 +158,10 @@ def train_one_epoch(epoch_index, tb_writer):
         optimizer_deco.zero_grad()
         optimizer_repr.zero_grad()
 
+        #import pdb; pdb.set_trace()
 
-        output_rewards = reward_predictor(inputs)
+        predictions = predictor(inputs)
+        output_rewards = reward_predictor(predictions)
         loss = loss_fn_repr(output_rewards, labels)
         loss.backward()
         # Adjust learning weights
@@ -168,27 +170,22 @@ def train_one_epoch(epoch_index, tb_writer):
 
         loss_dec = 0.
 
-        #x.split(1, dim=1)
-        in_img_list = inputs.split(1, dim=1)
-        in_img_truth_list = label_img.split(1, dim=1)
+        #predictions.detach()
+        #nb, nf, ndim = predictions.shape()
+        #in_img = predictions.view(nb*nf, ndim)
+        in_img = inputs[:, 0, ...] #.squeeze(1)
+        in_img_truth = label_img[:, 0, ...] #.squeeze(1)
 
-
-        for i_img in range(1): #n_conditioning_frames + n_prediction_frames): #r ange(n_conditioning_frames):
-            #in_img = inputs[:, i_img, ...] #.squeeze(1)
-            #in_img_truth = label_img[:, i_img, ...] #.squeeze(1)
-            in_img = in_img_list[i_img].squeeze(1)
-            in_img_truth = in_img_truth_list[i_img].squeeze(1)
-
-            enc_img = encoder(in_img)
-            in_img.detach()
-            enc_img.detach()
-            in_img_truth.detach()
-            dec_img = decoder(enc_img)
-            loss_i = loss_fn_decoder(dec_img, in_img_truth)
-            loss_dec += loss_i
-            loss_dec.backward()
-            optimizer_deco.step()
-            optimizer_deco.zero_grad()
+        enc_img = encoder(in_img)
+        in_img.detach()
+        enc_img.detach()
+        in_img_truth.detach()
+        dec_img = decoder(enc_img)
+        loss_i = loss_fn_decoder(dec_img, in_img_truth)
+        loss_dec += loss_i
+        loss_dec.backward()
+        optimizer_deco.step()
+        optimizer_deco.zero_grad()
 
         # Gather data and report
         running_loss += loss.item() + loss_dec.item()
@@ -243,7 +240,8 @@ def do_epochs(EPOCHS=1000):
                 vlabel_img = torch.stack([torch.unsqueeze(trafo(img), dim=1) for img in vlabel_img], dim=1).transpose(1,0).squeeze(2)
                 vlabels = vlabels[:, n_conditioning_frames:n_conditioning_frames + n_prediction_frames]
 
-                voutputs = reward_predictor(vinputs)
+                vpredictions = predictor(vinputs)
+                voutputs = reward_predictor(vpredictions)
                 vloss = loss_fn_repr(voutputs, vlabels)
 
                 vloss_dec = 0.
@@ -261,20 +259,19 @@ def do_epochs(EPOCHS=1000):
 
                 running_vloss += vloss + vloss_dec
 
-
-            #if(epoch_number % 10 ==0 ):
-            #    display = list(voutputs[0:2]) + list(vinputs[0:2])
-            #    display = torchvision.utils.make_grid(display,nrow=2)
-            #    torchvision.utils.save_image(display, "ae_comp.png")
-            vin_img = vinputs[:, 20, ...] #.squeeze(1)
-            vin_img_truth = vlabel_img[:, 20, ...] #.squeeze(1)
-            venc_img = encoder(vin_img)
-            vdec_img = decoder(venc_img)
-            display = list(vdec_img[0:1]) + list(vin_img_truth[0:1])
-            display = torchvision.utils.make_grid(display,nrow=2)
+            #every 
+            nb, nf, ndim = vpredictions.shape
+            vin_img = vpredictions.view(nb*nf, ndim)            
+            #print(vin_img.shape)
+            vin_img_truth = vlabel_img[:, n_conditioning_frames:n_prediction_frames+n_conditioning_frames, ...] #.squeeze(1)
+            nb, nf_t, nc, nw, nh = vin_img_truth.shape
+            assert(nf == nf_t)
+            vin_img_truth = vin_img_truth.reshape(nb*nf_t, nc, nw, nh) #.squeeze(1)
+            #venc_img = encoder(vin_img)
+            vdec_img = decoder(vin_img)
+            display = list(vdec_img[0:n_prediction_frames]) + list(vin_img_truth[0:n_prediction_frames])
+            display = torchvision.utils.make_grid(display,nrow=25)
             torchvision.utils.save_image(display, "ae_reward_x_comp.png")
-            #loss_i = loss_fn_decoder(dec_img, in_img_truth)
-
 
  
         avg_vloss = running_vloss /counter # (i + 1.)
@@ -298,7 +295,7 @@ def do_epochs(EPOCHS=1000):
 
         epoch_number += 1
 
-do_epochs(500)
+do_epochs(200)
 
 
 
