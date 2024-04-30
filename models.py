@@ -173,13 +173,14 @@ class Predictor(nn.Module):
         self.n_cond_frames = n_cond_frames
         self.n_pred_frames = n_pred_frames
         self.batch_size = batch_size
-        self.conv_encoder = ImageEncoder(input_channels, output_size)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.conv_encoder = ImageEncoder(input_channels, output_size).to(self.device)
         #self.fc = nn.Linear(output_size*3, self.lstm_output_size)  # from embedding to lstm 1 layer
-        self.lstm = nn.LSTM(input_size=self.lstm_output_size, hidden_size=self.lstm_output_size, num_layers=self.n_layers_lstm, batch_first=True)
+        self.lstm = nn.LSTM(input_size=self.lstm_output_size, hidden_size=self.lstm_output_size, num_layers=self.n_layers_lstm, batch_first=True).to(self.device)
         
         self.mlp_enc = nn.Sequential(
             MLP3(output_size*n_cond_frames, output_size=self.lstm_output_size),
-        )
+        ).to(self.device)
 
     def forward(self, x):
         #use n conditioning frames. here we are just encoding all of them but technially only need the first 3.. TODO fix to only 3 frames, check that this doesn't mess up update
@@ -201,8 +202,8 @@ class Predictor(nn.Module):
         #print("mlp size ", mlp_output.shape)
         mlp_output = mlp_output.unsqueeze(1) #TODO check 
 
-        h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size) # Initial hidden state
-        c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size) # Initial cell state
+        h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial hidden state
+        c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial cell state
 
         #print (output_sequence.shape)
         #print(output_sequence[:, 1, :].shape)

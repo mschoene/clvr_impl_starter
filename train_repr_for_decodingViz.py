@@ -107,10 +107,11 @@ loss_fn_repr = nn.MSELoss()
 
 optimizer_repr = optim.RAdam( list(predictor.parameters()) + list(reward_predictor.parameters()), betas = (0.9, 0.999))
 optimizer_deco = optim.RAdam( decoder.parameters(), betas = (0.9, 0.999))
-reward_predictor.to(device)
+
 predictor.to(device)
 reward_predictor.to(device)
 decoder.to(device)
+encoder.to(device)
 
 #print( summary(reward_predictor, (input_channels, output_size, batch_size)) )
 # Initializing in a separate cell so we can easily add more epochs to the same run
