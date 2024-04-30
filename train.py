@@ -27,7 +27,7 @@ from torchsummary import summary
 
 import torch.optim as optim
 
-from models import ImageEncoder, ImageDecoder, AE, Autoencoder #, AE_test
+from models import ImageEncoder, ImageDecoder, AE #,  Autoencoder #, AE_test
 
 #from torchvision import transform, transforms
 from torchvision.transforms import v2
@@ -104,11 +104,11 @@ model.to(device)
 print( summary(model, (1, output_size,output_size)) )
 # Initializing in a separate cell so we can easily add more epochs to the same run
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
+writer = SummaryWriter('runs/AE_trainer_{}'.format(timestamp))
 epoch_number = 0
 
 
-trafo = v2.Compose([v2.Grayscale(num_output_channels=1), v2.Normalize(mean=[-0.75], std=[2.]),])
+trafo = v2.Compose([v2.Grayscale(num_output_channels=1) ]) #, v2.Normalize(mean=[-0.75], std=[2.]),])
 invTrans = v2.Compose([ v2.Normalize(mean = [ 0. ], std = [ 1/2.]),
                         v2.Normalize(mean = [ 0.75 ], std = [ 1. ]),   ])
 #inv_tensor = invTrans(inp_tensor)
@@ -223,7 +223,8 @@ def do_epochs(EPOCHS=1000):
                 running_vloss += vloss
 
             if(epoch_number % 10 ==0 ):
-                display = list(invTrans(voutputs[0:2])) + list(invTrans(vinputs[0:2]))
+                #display = list(invTrans(voutputs[0:2])) + list(invTrans(vinputs[0:2]))
+                display = list(voutputs[0:2]) + list(vinputs[0:2])
                 display = torchvision.utils.make_grid(display,nrow=2)
                 torchvision.utils.save_image(display, "ae_comp.png")
     

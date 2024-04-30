@@ -7,6 +7,28 @@ from sprites_datagen.utils.template_blender import TemplateBlender
 from sprites_datagen.utils.trajectory import ConstantSpeedTrajectory
 
 
+class MovingSpriteDataset_DistractorOnly(Dataset):
+    """Dataset of multiple sprites bouncing in frame, contains different reward annotations."""
+    def __init__(self, spec, num_samples):
+        self._spec = spec
+        self._num_samples = num_samples
+        self._generator = DistractorOnlyGenerator(self._spec)
+        
+    def __len__(self):
+        return self._num_samples
+
+    def __getitem__(self, item):
+        traj = self._generator.gen_trajectory()
+
+        data_dict = AttrDict()
+        data_dict.images = traj.images[:, None].repeat(3, axis=1).astype(np.float32) / (255./2) - 1.0
+        data_dict.states = traj.states
+        data_dict.shape_idxs = traj.shape_idxs
+        data_dict.rewards = traj.rewards
+
+        return data_dict
+    
+
 class MovingSpriteDataset(Dataset):
     """Dataset of multiple sprites bouncing in frame, contains different reward annotations."""
     def __init__(self, spec, num_samples):
@@ -115,6 +137,16 @@ class DistractorTemplateMovingSpritesGenerator(TemplateMovingSpritesGenerator):
         if self._spec.shapes_per_traj > 2:
             shape_idxs = np.concatenate((shape_idxs,
                                          np.random.choice(distractor_idxs, size=self._spec.shapes_per_traj - 2)))
+        return shape_idxs
+
+class DistractorOnlyGenerator(TemplateMovingSpritesGenerator):
+    """Make distractor shape."""
+    DISTRACTOR = 'tri_bottom'
+
+    def _sample_shapes(self):
+        """Retrieves shape single distractor."""
+        assert self._spec.shapes_per_traj ==1
+        shape_idxs = np.asarray([self.SHAPES.index(self.DISTRACTOR)])
         return shape_idxs
 
 

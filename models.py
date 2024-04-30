@@ -87,9 +87,9 @@ class ImageDecoder(nn.Module):
         self.conv_layers = nn.Sequential(
             nn.Linear(64, 64),
             nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.Linear(64, 64 * 1 * 1),  # Linear layer to map from latent space to 4x4 feature map
-            nn.BatchNorm1d(64),
+            #nn.ReLU(),
+            #nn.Linear(64, 64 * 1 * 1),  # Linear layer to map from latent space to 4x4 feature map
+            #nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Unflatten(1, (64, 1, 1)),  # Reshape to 1x1 feature map with 64 channels
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: 
@@ -181,77 +181,19 @@ class AE(nn.Module):
         #reconstructed_image = torch.where(reconstructed_image > 0.5, torch.tensor(1.0), torch.tensor(-1.0))
         return reconstructed_image
     
-    
-#input_channels = 3  # Assuming input image has 3 channels (RGB)
-#output_size = 64  # Size of the output feature vector
-#encoder = ImageEncoder(input_channels, output_size)
-#deco = ImageDecoder(64, 3)
-
-#print(encoder)
-#<print(deco)
-
-
-#### Test if this one works at least 
-class Autoencoder(nn.Module):
-    def __init__(self):
-        super(Autoencoder, self).__init__()
-            
-        self.encoder = nn.Sequential(
-            
-            nn.Conv2d(1, 4, kernel_size=3, stride=2, padding=1), #1x64x64 -> 4x32x32
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(4, 8, kernel_size=3, stride=1, padding=1), # to 8x 16 x 16
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            
-
-            #nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
-            #nn.ReLU(),
-            #nn.MaxPool2d(kernel_size=2, stride=2),
-            #nn.Conv2d(16, 8, kernel_size=3, stride=1, padding=1),
-            #nn.ReLU(),
-            #nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Flatten(),
-            nn.Linear(8*8*8 , 64) 
-        )
-
-        self.decoder = nn.Sequential(
-            nn.Unflatten(1, (64, 1, 1)),  # Unflatten the input tensor
-            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),  # Output size: [32, 2, 2]
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),  # Output size: [16, 4, 4]
-            nn.ReLU(),
-            nn.ConvTranspose2d(16, 8, kernel_size=4, stride=2, padding=1),   # Output size: [8, 8, 8]
-            nn.ReLU(),
-            nn.ConvTranspose2d(8, 4, kernel_size=4, stride=2, padding=1),    # Output size: [4, 16, 16]
-            nn.ReLU(),
-            nn.ConvTranspose2d(4, 1, kernel_size=4, stride=2, padding=1),    # Output size: [1, 32, 32]
-            nn.ReLU(),
-            nn.ConvTranspose2d(1, 1, kernel_size=4, stride=2, padding=1),    # Output size: [1, 64, 64]
-            nn.Tanh()
-        )
-
-
-    def forward(self, x):
-        #print("init shape ", x.shape)
-        x = self.encoder(x)
-        #print(x.shape)
-        x = self.decoder(x)
-        return x
- 
- 
  
 
-#3 layer MLP, takes an input output and hidden size
+#3 layer MLP, takes an input, output and hidden size
 class MLP3(nn.Module):
     def __init__(self,input_size, output_size, hidden_size=32):
         super(MLP3, self).__init__()
             
         self.mlp_layers = nn.Sequential(
             nn.Linear(input_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),            
+            nn.Linear(hidden_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),        
             nn.ReLU(),
             nn.Linear(hidden_size, output_size),
         )
@@ -259,3 +201,90 @@ class MLP3(nn.Module):
     def forward(self, x):
         return self.mlp_layers(x)
  
+
+
+n_output_steps = 5
+lstm_output_size = 32
+n_layers_lstm = 1
+
+
+class RewardPredictor(nn.Module):
+    def __init__(self, input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=32, n_layers_lstm=1, hidden_size=32):
+        super(RewardPredictor, self).__init__()
+
+        self.lstm_output_size = lstm_output_size
+        self.n_layers_lstm = n_layers_lstm
+        self.n_cond_frames = n_cond_frames
+        self.n_pred_frames = n_pred_frames
+        self.batch_size = batch_size
+        self.conv_encoder = ImageEncoder(input_channels, output_size)
+        #self.fc = nn.Linear(output_size*3, self.lstm_output_size)  # from embedding to lstm 1 layer
+        self.lstm = nn.LSTM(input_size=self.lstm_output_size, hidden_size=self.lstm_output_size, num_layers=self.n_layers_lstm, batch_first=True)
+        
+        self.mlp_enc = nn.Sequential(
+            MLP3(output_size*n_cond_frames, output_size=self.lstm_output_size),
+        )        
+        
+        #TODO one per time step and reward head, loop in forward?
+        self.mlp_head1 = nn.Sequential(
+            MLP3(lstm_output_size, output_size=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        #use n conditioning frames. here we are just encoding all of them but technially only need the first 3.. TODO fix to only 3 frames, check that this doesn't mess up update
+        conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
+
+        # Concat embeds before feeding into mlp
+        #for i_cond_frame in self.n_cond_frames:  
+        #merged_embedding = torch.cat( (conv_embeddings[0], conv_embeddings[1], conv_embeddings[2]), dim=1) #TODO fix for batch to dim 1?
+        merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) #TODO fix for batch to dim 1?
+        #print("conv is leaf ", merged_embedding.is_leaf)
+
+        #detached_embeddings = [embedding.detach() for embedding in conv_embeddings]
+            #       Concatenate detached tensors along dim=1
+        #merged_embedding = torch.cat(detached_embeddings, dim=1)
+
+        #print("merged shape ", merged_embedding.shape)
+        # pass into MLP
+        mlp_output = self.mlp_enc(merged_embedding) #TODO check if needs to be split in 3?
+        #print("mlp size ", mlp_output.shape)
+        mlp_output = mlp_output.unsqueeze(1) #TODO check 
+
+        h0 = torch.zeros(n_layers_lstm, self.batch_size, lstm_output_size) # Initial hidden state
+        c0 = torch.zeros(n_layers_lstm, self.batch_size, lstm_output_size) # Initial cell state
+
+        #print (output_sequence.shape)
+        #print(output_sequence[:, 1, :].shape)
+        #TODO fix range to end of traj/max len of traj
+        #output_sequence = []
+        outputs_list = []
+        input_t = mlp_output
+
+
+        #print("mlp still leaf ", mlp_output.is_leaf) #, mlp_output.grad )
+        #print(mlp_output.size())
+        for i_step in range(self.n_pred_frames):
+            #output, (h0, c0)  = self.lstm(mlp_output, (h0, c0))
+            #print("output itself is leaf ", outputs.is_leaf)
+            #print(output)
+            #output_sequence.append(output)
+
+            lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
+
+            #reward predition head 1 #TODO add others/make it a larger tensor of dimension n_reward_heads
+            output_t = self.mlp_head1(h0[-1]) 
+
+            outputs_list.append(output_t.unsqueeze(1))
+            #without teacher forcign #TODO check if teacher forcing is nec.
+            input_t = lstm_outstep
+            #print("lstm output size ", lstm_outstep.shape)
+            # Update input for next prediction (use predicted output)
+            #input_t = output_t#.unsqueeze(1)
+
+        # Concatenate predicted outputs along the sequence dimension
+        outputs = torch.cat(outputs_list, dim=1).squeeze()
+        #outputs.squeeze()
+        #outputs.retain_grad()
+        #print(outputs.grad)
+        return outputs
