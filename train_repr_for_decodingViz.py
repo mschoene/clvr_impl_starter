@@ -66,8 +66,8 @@ spec = AttrDict(
 
 n_conditioning_frames = 3
 n_prediction_frames = 25 #TODO change to 25 or w/e
-batch_size = 64
-n_batches = 50
+batch_size = 128 #64
+n_batches = 100
 n_samples = batch_size*n_batches
 
 input_channels = 1 # 3 but we change it to grey scale first
@@ -296,7 +296,7 @@ def do_epochs(EPOCHS=1000):
 
         epoch_number += 1
 
-do_epochs(200)
+do_epochs(400)
 
 
 

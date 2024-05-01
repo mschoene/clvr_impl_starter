@@ -22,6 +22,8 @@ interactive:
   max_runtime: 24h
   jupyter:
     idle_timeout: 180m
+export:
+/output_folder/: runs://
 #ports:
 #  - name: streamlit
 #    type: http
