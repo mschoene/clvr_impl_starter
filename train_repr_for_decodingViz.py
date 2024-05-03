@@ -297,7 +297,7 @@ def do_epochs(EPOCHS=1000):
 
         epoch_number += 1
 
-do_epochs(200)
+do_epochs(300)
 
 
 

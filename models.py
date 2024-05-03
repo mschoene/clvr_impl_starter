@@ -32,8 +32,8 @@ class ImageEncoder(nn.Module):
         layers.append(nn.Linear(out_channels,64))
         layers.append(nn.BatchNorm1d(64))
         layers.append(nn.ReLU())
-        #layers.append(nn.Linear(128, 64))
-        layers.append(nn.Linear(64, 64))
+        layers.append(nn.Linear(128, 64))
+        #layers.append(nn.Linear(64, 64))
         return nn.Sequential(*layers)
     
  #       self.conv_layers = nn.Sequential(
