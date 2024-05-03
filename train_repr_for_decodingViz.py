@@ -66,7 +66,7 @@ spec = AttrDict(
 
 n_conditioning_frames = 3
 n_prediction_frames = 25 #TODO change to 25 or w/e
-batch_size = 64
+batch_size = 128 #64
 n_batches = 100
 n_samples = batch_size*n_batches
 
@@ -289,8 +289,8 @@ def do_epochs(EPOCHS=1000):
         # Track best performance, and save the model's state
         if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1:
             best_vloss = avg_vloss
-            #model_path = 'models/model_{}_{}'.format(timestamp, epoch_number)
-            #torch.save(model.state_dict(), model_path)
+            model_path = 'models/decoder_model_{}_{}'.format(timestamp, epoch_number)
+            torch.save(decoder.state_dict(), model_path)
 
         if  avg_vloss < 0.00001:
             break
