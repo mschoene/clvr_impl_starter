@@ -29,10 +29,11 @@ class ImageEncoder(nn.Module):
         layers.append(nn.BatchNorm2d(out_channels))  # Add BatchNorm layer after Conv2d
         layers.append(nn.ReLU())
         layers.append(nn.Flatten())
-        layers.append(nn.Linear(out_channels,128))
-        layers.append(nn.BatchNorm1d(128))
+        layers.append(nn.Linear(out_channels,64))
+        layers.append(nn.BatchNorm1d(64))
         layers.append(nn.ReLU())
-        layers.append(nn.Linear(128, 64))
+        #layers.append(nn.Linear(128, 64))
+        layers.append(nn.Linear(64, 64))
         return nn.Sequential(*layers)
     
  #       self.conv_layers = nn.Sequential(
@@ -267,3 +268,29 @@ class CNN(nn.Module):
         x = self.fc1(x)
         x = self.fc2(x)
         return x
+    
+
+class Oracle(nn.Module):
+    def __init__(self, input_size):
+        super(Oracle,self).__init__()
+        self.size = 32
+        self.input_size = input_size
+        self.layers = nn.Sequential(
+            nn.Linear(input_size, self.size),
+            nn.ReLU(),
+            nn.Linear(self.size, self.size),
+            nn.ReLU(),
+        )
+        self.value_out = nn.Sequential(nn.Linear(self.size, 1), nn.Sigmoid())
+        self.action_out = nn.Sequential(nn.Linear(self.size, 9), nn.Softmax(dim=1))
+        #self.tanh = nn.Tanh()
+
+        #self.action_pred = nn.Linear(self.size, 9)
+    def forward(self, x):
+        x = self.layers(x)
+        value = self.value_out(x)
+        action = self.action_out(x)
+        #action_x = self.tanh(x) #TODO check if this makes sense and converges or change to output over the discreet action space 1..9
+        #action_y= self.tanh(x)
+        return action, value
+

@@ -66,7 +66,7 @@ spec = AttrDict(
 
 n_conditioning_frames = 3
 n_prediction_frames = 25 #TODO change to 25 or w/e
-batch_size = 128 #64
+batch_size = 64
 n_batches = 100
 n_samples = batch_size*n_batches
 
@@ -191,6 +191,7 @@ def train_one_epoch(epoch_index, tb_writer):
         # Gather data and report
         running_loss += loss.item() + loss_dec.item()
         if i_batch % n_batches == (n_batches -1):
+            print('Last loss of lstm {} and decoder {}'.format( loss.item(), loss_dec.item() ))
             last_loss = running_loss / float(n_batches) # loss per batch
             #print('  batch {} loss: {}'.format(i_batch + 1, last_loss))
             #print(' l1 loss ', l1_lambda * l1_loss )
@@ -296,7 +297,7 @@ def do_epochs(EPOCHS=1000):
 
         epoch_number += 1
 
-do_epochs(400)
+do_epochs(200)
 
 
 
