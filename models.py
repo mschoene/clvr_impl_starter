@@ -82,9 +82,9 @@ class ImageDecoder(nn.Module):
         self.output_size = output_size 
 
         self.conv_layers = nn.Sequential(
-            nn.Linear(64, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
+            #nn.Linear(64, 64),
+            #nn.BatchNorm1d(64),
+            #nn.ReLU(),
             nn.Unflatten(1, (64, 1, 1)),  # Reshape to 1x1 feature map with 64 channels
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: 
             nn.BatchNorm2d(64),  # Add BatchNorm layer after Conv2d
@@ -282,7 +282,7 @@ class Oracle(nn.Module):
             nn.ReLU(),
         )
         self.value_out = nn.Sequential(nn.Linear(self.size, 1), nn.Sigmoid())
-        self.action_out = nn.Sequential(nn.Linear(self.size, 9), nn.Softmax(dim=1))
+        self.action_out = nn.Sequential(nn.Linear(self.size, 9), nn.Softmax(dim=0))
         #self.tanh = nn.Tanh()
 
         #self.action_pred = nn.Linear(self.size, 9)
