@@ -281,16 +281,18 @@ class Oracle(nn.Module):
             nn.Linear(self.size, self.size),
             nn.ReLU(),
         )
-        self.value_out = nn.Sequential(nn.Linear(self.size, 1), nn.Sigmoid())
+        self.value_out = nn.Sequential(nn.Linear(self.size, 1) )#, nn.Sigmoid())
         self.action_out = nn.Sequential(nn.Linear(self.size, 9), nn.Softmax(dim=0))
-        #self.tanh = nn.Tanh()
-
+        self.sig = nn.Sigmoid()
+        self.Lin2 = nn.Linear(self.size, 2)
         #self.action_pred = nn.Linear(self.size, 9)
     def forward(self, x):
         x = self.layers(x)
         value = self.value_out(x)
-        action = self.action_out(x)
-        #action_x = self.tanh(x) #TODO check if this makes sense and converges or change to output over the discreet action space 1..9
+        #action = self.action_out(x)
+        x = self.Lin2(x)
+        action_proba = self.sig(x) 
         #action_y= self.tanh(x)
-        return action, value
+        return x,action_proba, value
+        #        return action, value
 

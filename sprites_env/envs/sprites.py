@@ -220,3 +220,32 @@ if __name__  == '__main__':
     cv2.imwrite("test_rl.png", 255 * np.expand_dims(obs, -1))
     obs, reward, done, info = env.step([0, 0])
     cv2.imwrite("test_rl_1.png", 255 * np.expand_dims(obs, -1))
+
+
+
+#Helper function for RL part
+def map_int_to_action(integer):
+    """
+    Maps an integer from 0 to 8 to a corresponding action.
+    Args:
+    - integer (int): Integer value between 0 and 8
+    Returns:
+    - action (numpy.ndarray): NumPy array representing the action, e.g., [0, 0] or [1, -1]
+    """
+    # Define the mapping for each integer
+    mapping = {
+        0: np.array([0, 0]),
+        1: np.array([0, 1]),
+        2: np.array([0, -1]),
+        3: np.array([1, 0]),
+        4: np.array([1, 1]),
+        5: np.array([1, -1]),
+        6: np.array([-1, 0]),
+        7: np.array([-1, 1]),
+        8: np.array([-1, -1])
+    }
+    # Check if the integer is valid
+    if integer < 0 or integer > 8:
+        raise ValueError("Integer must be between 0 and 8")
+    # Return the corresponding action
+    return mapping[integer]

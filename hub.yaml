@@ -21,11 +21,10 @@ run:
 interactive:
   max_runtime: 24h
   jupyter:
-    idle_timeout: 180m
+    idle_timeout: 500m
 export:
-/output_folder/: runs://
+/output_folder/: code/
 #ports:
 #  - name: streamlit
 #    type: http
 #    port: 80
-
