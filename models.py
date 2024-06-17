@@ -1,6 +1,9 @@
 import torch.nn as nn
 import math
 import torch
+from torch.distributions import MultivariateNormal, Normal, Independent
+#from rlkit.torch.distributions import  TanhNormal
+import numpy as np
 
 class ImageEncoder(nn.Module):
     def __init__(self, input_channels, output_size):
@@ -184,30 +187,16 @@ class Predictor(nn.Module):
         ).to(self.device)
 
     def forward(self, x):
-        #use n conditioning frames. here we are just encoding all of them but technially only need the first 3.. TODO fix to only 3 frames, check that this doesn't mess up update
         conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
 
-        # Concat embeds before feeding into mlp
-        #for i_cond_frame in self.n_cond_frames:  
-        #merged_embedding = torch.cat( (conv_embeddings[0], conv_embeddings[1], conv_embeddings[2]), dim=1) #TODO fix for batch to dim 1?
         merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) #TODO fix for batch to dim 1?
-        #print("conv is leaf ", merged_embedding.is_leaf)
 
-        #detached_embeddings = [embedding.detach() for embedding in conv_embeddings]
-            #       Concatenate detached tensors along dim=1
-        #merged_embedding = torch.cat(detached_embeddings, dim=1)
-
-        #print("merged shape ", merged_embedding.shape)
-        # pass into MLP
         mlp_output = self.mlp_enc(merged_embedding) #TODO check if needs to be split in 3?
-        #print("mlp size ", mlp_output.shape)
         mlp_output = mlp_output.unsqueeze(1) #TODO check 
 
         h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial hidden state
         c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial cell state
 
-        #print (output_sequence.shape)
-        #print(output_sequence[:, 1, :].shape)
         #TODO fix range to end of traj/max len of traj
         #output_sequence = []
         outputs_list = []
@@ -220,7 +209,6 @@ class Predictor(nn.Module):
             input_t = lstm_outstep
 
         # Concatenate predicted outputs along the sequence dimension = [nb, >ns<]
-        #outputs = torch.cat(outputs_list, dim=1).squeeze()
         outputs = torch.stack(outputs_list, dim=1).squeeze(2)
         return outputs
 
@@ -229,7 +217,6 @@ class RewardPredictor(nn.Module):
     def __init__(self, n_pred_frames=25, n_heads=4, lstm_output_size=64 ):
         super(RewardPredictor, self).__init__()
         self.n_pred_frames = n_pred_frames
-        #self.lstm_out = lstm_out
         self.n_heads = n_heads
         self.heads = nn.ModuleList([  nn.Sequential(MLP3(lstm_output_size, output_size=1), nn.Sigmoid()) for _ in range(self.n_heads)  ])
 
@@ -250,29 +237,233 @@ class RewardPredictor(nn.Module):
     
 
 class CNN(nn.Module):
-    def __init__(self, input_channels, output_channels, kernel_size, stride): 
+    def __init__(self, input_channels=1 , kernel_size=3, stride=2): 
         super(CNN, self).__init__()
         self.layer1 = nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride)
         self.layer2 = nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride)
         self.layer3 = nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride)
         self.fc1 = nn.Linear(16*(16-1)*3, 64)  #channel-1 xchannel x n_kernels
-        self.fc2 = nn.Linear(64, 64) 
+        self.fc2 = nn.Linear(64, 64)  #channel-1 xchannel x n_kernels
+        self.fc_actor = nn.Linear(64, 64) 
+        self.fc_critic = nn.Linear(64, 64) 
         self.relu = nn.ReLU()
 
+        self.sig = nn.Sigmoid()
+        self.actions = nn.Linear(64, 2)
+
+        self.value_out = nn.Sequential(nn.Linear(64, 1) )#, nn.Sigmoid())
+
     def forward(self, x):
-        x = F.relu(self.layer1(x))
-        x = F.relu(self.layer2(x))
-        x = F.relu(self.layer3(x))
+        x = self.relu(self.layer1(x))
+        x = self.relu(self.layer2(x))
+        x = self.relu(self.layer3(x))
         #Flatten
         x = x.view(x.size(0), -1) 
         x = self.fc1(x)
         x = self.fc2(x)
-        return x
-    
+        critic = self.value_out(x)
+
+        action = self.actions(x)
+        action_proba = self.sig(action) 
+        return action, action_proba, critic
+
+
+
+
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.orthogonal_(m.weight)
+        m.bias.data.fill_(0.01)
 
 class Oracle(nn.Module):
-    def __init__(self, input_size):
+    def __init__(self, input_size, action_space, state_dim, action_std_init):
         super(Oracle,self).__init__()
+        self.size = 32
+        self.input_size = input_size
+
+        #continous action space only
+        self.action_dim = 2
+        #self.initial_action_std = 0.1 #action_std_init
+        self.initial_action_std = action_std_init
+        #self.min_action_std = 0.001#min_action_std
+        #self.decay_rate = 0.99 #decay_rate
+        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
+        #self.action_std = torch.ones(self.action_dim)  * action_std_init #, requires_grad=True)
+        #self.action_std = nn.Parameter(torch.zeros_like(self.action_dim) , requires_grad=True)
+        #self.current_action_std = self.action_std
+
+        # shared part of the network
+        self.shared_layers = nn.Sequential(
+            nn.Linear(input_size, self.size),
+            nn.Tanh(),
+            nn.Linear(self.size, self.size),
+            nn.Tanh(),
+        )
+
+        self.critic_layers = nn.Sequential(             
+            #nn.Linear(input_size, self.size),
+            #nn.Tanh(),
+            #nn.Linear(self.size, self.size),
+            #nn.Tanh(),
+            nn.Linear(self.size, 1) )#, nn.Sigmoid())
+        self.actor_layers = nn.Sequential(            
+            #nn.Linear(input_size, self.size),
+            #nn.Tanh(),
+            #nn.Linear(self.size, self.size),
+            #nn.Tanh(), 
+            nn.Linear(self.size, self.action_dim) , nn.Tanh())
+
+        #self.log_std = nn.Parameter(torch.ones(1, self.action_dim) * action_std_init)
+        self.actor_layers.apply(init_weights)
+        self.critic_layers.apply(init_weights)
+        self.shared_layers.apply(init_weights)
+
+    def forward(self, x, episode_num = 0):
+        x = self.shared_layers(x)
+        value = self.critic_layers(x)
+        actor_output = self.actor_layers(x)
+        #action_std = self.action_std.expand_as(actor_output)
+        #dist = Normal(actor_output, action_std)
+        #action_std = self.action_std.clamp(min=0, max=2)  # Clamping std
+        #action_std = self.action_std.expand_as(actor_output)
+
+        #self.current_action_std = max(self.min_action_std, self.initial_action_std * (self.decay_rate ** episode_num))
+        #action = action_mean + self.current_action_std * torch.randn_like(action_mean)
+        #self.current_action_std = torch.ones(self.action_dim)  * self.current_action_std #, requires_grad=True)
+
+        #print(self.current_action_std,self.current_action_std )
+        #action_std = self.action_std.expand_as(actor_output)
+        #dist = Independent(Normal(actor_output, action_std), 1)  # Independent per dimension
+        
+        action_cov = torch.diag(self.action_std)
+        dist = MultivariateNormal(actor_output, action_cov)
+        #dist = Normal(actor_output, action_std)  # Independent per dimension
+
+        #dist = TanhNormal(actor_output, action_std)  # Independent per dimension
+        
+        #ttraf = torch.distributions.transforms.TanhTransform(cache_size =1)
+        #ttraf= ttraf(dist)
+        #torch.distributions.TransformedDistribution(dist, ttraf)
+        return dist, value
+    
+    #return action, action logs probabs and value
+    def act(self, state, episode_num=0, deterministic=False):
+        dist, value = self(state, episode_num)
+        if deterministic:
+            action = dist.mean
+        else:
+            action = dist.rsample()
+
+        #action = np.clip(action, -1, 1)
+        action_log_probs = dist.log_prob(action).sum(dim=-1)
+        #action = torch.tanh(action)  # Squashing the action
+        #dist_entropy = dist.entropy().sum(dim=-1)
+        #return action.detach(), action_log_probs.detach(), value.detach()
+        return action, action_log_probs, value
+    
+        # first through shared layer
+        state = self.shared_layers(state)
+        # Compute action mean and standard deviation
+        actor_output = self.actor_layers(state)
+        action_std = self.action_std.expand_as(actor_output)
+        dist = Normal(actor_output, action_std)
+
+        # Sample actions
+        if deterministic:
+            action = actor_output
+        else:
+            action = dist.sample()
+
+        # Compute log probabilities and state values
+        action_log_probs = dist.log_prob(action) #.sum(dim=-1)
+        value = self.critic_layers(state)
+
+        return action.detach(), action_log_probs.detach(), value.detach()
+    
+    #evaluating model for a given action
+    def evaluate(self, state, action):
+        dist, value = self(state)
+        #action_log_probs = dist.log_prob(action)
+        #dist_entropy = dist.entropy()
+        action_log_probs = dist.log_prob(action).sum(dim=-1)
+        dist_entropy = dist.entropy().sum(dim=-1)
+        return action_log_probs, value, dist_entropy    
+        # first through shared layer
+        state = self.shared_layers(state)
+        # Compute action mean and standard deviation
+        actor_output = self.actor_layers(state)
+        action_std = self.action_std.expand_as(actor_output)
+        dist = Normal(actor_output, action_std)
+
+        # Evaluate given actions
+        action_log_probs = dist.log_prob(action).sum(dim=-1)
+        dist_entropy = dist.entropy().sum(dim=-1)
+        value = self.critic_layers(state)
+
+        return action_log_probs, value, dist_entropy
+    
+#    def act(self, state, deterministic=False):
+#
+#        state = self.layers(state)
+#
+#        action_mean = self.actor(state)
+#        #cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
+#        #cov_mat = torch.diag(self.log_std.exp()).unsqueeze(dim=0)
+#        #cov_mat = torch.diag(self.log_std.exp())
+#        cov_mat = torch.diag_embed(self.log_std)
+#        #_dist = MultivariateNormal(action_mean, cov_mat)
+#        #mu = torch.tensor([0., 0.])
+#        #_dist = MultivariateNormal(action_mean, cov_mat)
+#        #print(action_mean, cov_mat, self.log_std, torch.diag(self.log_std) ,self.action_var )
+#
+#        _dist = MultivariateNormal(action_mean, cov_mat)
+#            
+#        if deterministic:
+#            action = action_mean # _dist.mode()
+#            #print(action)
+#        else:
+#            action = _dist.rsample()
+#
+#        action_log_probs = _dist.log_prob(action)
+#        #dist_entropy = dist.entropy().mean()
+#        value = self.critic(state)
+#        #action = torch.tanh(action)
+#
+#        return action.detach(), action_log_probs.detach(), value.detach()
+
+
+    #def evaluate(self, state, action):
+    #    state = self.layers(state)
+    #    action_mean = self.actor(state)
+#
+    #    #action_var = self.action_var.expand_as(action_mean)
+    #    #action_var = self.log_std.expand_as(action_mean)
+    #    #cov_mat = torch.diag_embed(action_var)
+    #    cov_mat = torch.diag_embed(self.log_std)
+    #    #cov_mat = torch.diag(action_var).unsqueeze(dim=0)
+    #    dist = MultivariateNormal(action_mean, cov_mat)
+    #    #print("action mean and simga  ", action_mean, cov_mat )
+    #    #mu = torch.tensor([0., 0.])
+    #    #dist = MultivariateNormal(mu, cov_mat)
+    #    #dist = MultivariateNormal(0.0, cov_mat)
+    #    
+    #    #evaluate batch actions under distr given the policy (ie actor(states))
+    #    action_logprobs = dist.log_prob(action)
+    #    dist_entropy = dist.entropy()
+    #    state_values = self.critic(state)
+    #    
+    #    return action_logprobs, state_values, dist_entropy
+
+
+
+
+
+
+
+
+class Oracle_discret(nn.Module):
+    def __init__(self, input_size, n_classes):
+        super(Oracle_discret,self).__init__()
         self.size = 32
         self.input_size = input_size
         self.layers = nn.Sequential(
@@ -282,17 +473,24 @@ class Oracle(nn.Module):
             nn.ReLU(),
         )
         self.value_out = nn.Sequential(nn.Linear(self.size, 1) )#, nn.Sigmoid())
-        self.action_out = nn.Sequential(nn.Linear(self.size, 9), nn.Softmax(dim=0))
-        self.sig = nn.Sigmoid()
-        self.Lin2 = nn.Linear(self.size, 2)
-        #self.action_pred = nn.Linear(self.size, 9)
+        #self.action_v = nn.Sequential(nn.Linear(self.size, n_classes), nn.ReLU())
+        self.action_p = nn.Sequential(nn.Linear(self.size, n_classes), nn.Softmax(dim = 0))
+
     def forward(self, x):
         x = self.layers(x)
         value = self.value_out(x)
-        #action = self.action_out(x)
-        x = self.Lin2(x)
-        action_proba = self.sig(x) 
-        #action_y= self.tanh(x)
-        return x,action_proba, value
-        #        return action, value
+        action_p = self.action_p(x) 
+        #print(action_p.shape)
+        dim_axis=0
+        if len(action_p.shape) == 2:
+            dim_axis = 1
+        else:
+            dim_axis = 0
+        #print(action_p.shape)
+        #print(torch.zeros_like(action_p).scatter(0, action_p.argmax(0,True), value=1))
+        
+        action_v  = torch.argmax(action_p, dim=dim_axis)#.item()
+
+        return action_v, action_p,  value
+
 
