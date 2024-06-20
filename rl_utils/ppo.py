@@ -103,6 +103,7 @@ class MimiPPO:
                     if param.requires_grad and "action_std" in name:
                         print( name, param.data)  
 
+            self.model = self.model.to('cpu') 
             ###  collecting trajectories and appending the episodes to the buffer ###
             collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
             #collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=1)
@@ -115,10 +116,14 @@ class MimiPPO:
                     data = NpDataset( ( [ele for ele in self.replayBuffer] ))
                     total_loss = 0.
 
+                    if self.device.type == 'cuda':
+                        self.model.to(self.device)
+
                     random_sampler = RandomSampler(data, num_samples = len(self.replayBuffer) ) 
                     dataloader = DataLoader(data, batch_size = self.minibatch_size , collate_fn=my_collate_fn, sampler=random_sampler )
 
                     for _, sample_batched in enumerate(dataloader):
+                             
                         self.model.train()
                         pos_t_batched, actions_batched, action_probas_old_batched, advantage_batched, return_batched, reward_batched = extract_values_from_batch(sample_batched, self.minibatch_size)
                         
