@@ -211,7 +211,7 @@ def do_epochs(EPOCHS=1000):
 
             display = list(vdec_img[0:n_prediction_frames]) + list(vin_img_truth[0:n_prediction_frames])
             display = torchvision.utils.make_grid(display,nrow=25)
-            torchvision.utils.save_image(display, "ae_reconstruction.png")
+            torchvision.utils.save_image(display, "models/ae_reconstruction.png")
 
  
         avg_vloss = running_vloss /counter # (i + 1.)
