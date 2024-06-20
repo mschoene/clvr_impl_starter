@@ -73,8 +73,8 @@ class MimiPPO:
         self.n_episodes = n_episodes#50 #0#500  #total number of iterations over the  data, this will mean M*nEpisodes = #of steps taken
         self.n_epochs =  n_epochs  #number of optim steps on a given buffer data set
 
-        #self.buffer_size = n_actors* (self.n_traj_steps+1)*self.n_trajectories # M = N*T thus defining the number of actors as N = M/T
-        self.buffer_size = 4* 2* 8 * (self.n_traj_steps+1) # M = N*T thus defining the number of actors as N = M/T
+        self.buffer_size = 4 * n_actors* (self.n_traj_steps+1)*self.n_trajectories # M = N*T thus defining the number of actors as N = M/T
+        #self.buffer_size = 4* 2* 8 * (self.n_traj_steps+1) # M = N*T thus defining the number of actors as N = M/T
 
         self.batch_size = n_actors* (self.n_traj_steps+1)*self.n_trajectories  #256 #512 #1024  #64 #32 #64 #128 #32 #128
 
@@ -103,11 +103,11 @@ class MimiPPO:
                         print( name, param.data)  
 
             ###  collecting trajectories and appending the episodes to the buffer ###
-            #collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
+            collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
             #collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=1)
-            collect_n_trajectories(4, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=4 )
+            #ollect_n_trajectories(4, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=4 )
             ###
-            counter += (2 * 8 * self.n_traj_steps)
+            counter += (self.n_trajectories * self.n_actors * self.n_traj_steps)
 
             if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
                 for i_epoch in range(self.n_epochs):   

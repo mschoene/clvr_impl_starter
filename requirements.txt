@@ -1,4 +1,4 @@
-numpy
+numpy==1.23.1
 matplotlib
 opencv-python
 gym
@@ -8,4 +8,3 @@ torchviz
 tensorboard
 torchsummary
 torchvision
-wandb

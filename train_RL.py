@@ -61,9 +61,16 @@ def main(args):
                           action_space=env.action_space.shape[0], 
                           action_std_init=actions_space_std, 
                           encoder_output_size=policy_input_dim,
-                          separate_layers=separate_ac_mlps
+                          separate_layers=separate_ac_mlps,
                           )
-    ppo_trainer = MimiPPO(model, env, env_name, std_coef=args.std_coef, ent_coef=ent_coef, minibatch_size=minibatch_size)
+    ppo_trainer = MimiPPO(model, 
+                          env, 
+                          env_name, 
+                          std_coef=args.std_coef, 
+                          ent_coef=ent_coef, 
+                          minibatch_size=minibatch_size,
+                          n_epochs=args.n_epochs                          
+                          )
 
     #ppo_trainer = MimiPPO( model, env)
     #ppo_trainer = MimiPPO( model, env, std_coef=0.2, ent_coef= 0.0015 ,  minibatch_size=128)
@@ -80,6 +87,7 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.0015, help="Entropy coefficient.")
     parser.add_argument('--minibatch_size', type=int, default=128, help="Minibatch size.")
     parser.add_argument('--n_distractors', type=int, choices=range(4), default=0, help="Number of distractors (0 to 3).")
+    parser.add_argument('--n_epochs', type=int, choices=range(5000), default=500, help="Number of epochs, default 500.")
 
     args = parser.parse_args()
     wandb.config.update(args)
