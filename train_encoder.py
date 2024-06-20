@@ -50,7 +50,7 @@ spec = AttrDict(
         max_seq_len=30, #30,
         max_speed=0.05,      # total image range [0, 1]
         obj_size=0.2,       # size of objects, full images is 1.0
-        shapes_per_traj=1,      # number of shapes per trajectory
+        shapes_per_traj=2,      # number of shapes per trajectory
         #rewards=[TargetXReward, TargetYReward, AgentXReward, AgentYReward]
         rewards=[VertPosReward, HorPosReward]
     )
@@ -65,7 +65,7 @@ spec = AttrDict(
 #cv2.imwrite("test.png", img[0].transpose(1, 2, 0))
 
 n_conditioning_frames = 3
-n_prediction_frames = 25 #TODO change to 25 or w/e
+n_prediction_frames = 25 
 batch_size = 128 #64
 n_batches = 100
 n_samples = batch_size*n_batches
@@ -227,7 +227,7 @@ def do_epochs(EPOCHS=1000):
         # Track best performance, and save the model's state
         if (avg_vloss<0.0016) or epoch_number==EPOCHS-1:
             best_vloss = avg_vloss
-            model_path = 'models/encoder_model_{}_{}'.format(timestamp, epoch_number)
+            model_path = 'models/encoder_model_2obj_{}_{}'.format(timestamp, epoch_number)
             torch.save(encoder.state_dict(), model_path)
 
         if  avg_vloss < 0.00001:
@@ -235,7 +235,7 @@ def do_epochs(EPOCHS=1000):
 
         epoch_number += 1
 
-do_epochs(10)
+do_epochs(300)
 
 
 
