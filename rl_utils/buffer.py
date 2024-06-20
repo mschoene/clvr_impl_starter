@@ -43,8 +43,11 @@ def extract_values_from_batch(batched_data, batch_size):
         iadvantage = batched_data[9]
         iret = batched_data[8]
     
-    ipos_t = torch.stack(ipos_t)
-    ipos_t = ipos_t.to(torch.float32)
-    
-    return ipos_t, torch.stack(iaction).detach(), torch.stack(iaction_probas_old).detach(), torch.stack(iadvantage).detach(), torch.stack(iret).detach(), ireward
+    ipos_t = torch.stack(ipos_t).to(torch.float32)
+    iaction = torch.stack(iaction).detach()
+    iaction_probas_old = torch.stack(iaction_probas_old).detach()
+    iadvantage = torch.stack(iadvantage).detach()
+    iret = torch.stack(iret).detach()
+    ireward = torch.tensor(ireward).to(torch.float32)
 
+    return ipos_t, iaction, iaction_probas_old, iadvantage, iret, ireward

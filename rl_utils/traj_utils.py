@@ -62,32 +62,6 @@ def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, 
                 replayBuffer.append([v for v in asdict(e_t).values()])
 
 
-
-#def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, gamma, lambda_val, n_workers = 4):
-#    with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
-#        futures = []
-#        
-#        for _ in range(n_traj):
-#            future = executor.submit(collect_trajectory, actor, env_name, n_traj_steps)
-#            calc_discd_vals(future.result(), gamma, lambda_val)
-#            futures.append(future)
-#
-#        for future in concurrent.futures.as_completed(futures):
-#            trajectory = future.result()
-#            #calc_discd_vals(trajectory, gamma, lambda_val)
-#            for e_t in trajectory:
-#                replayBuffer.append([v for v in asdict(e_t).values()])
-
-            #print(len(replayBuffer))
-            #replayBuffer.add_trajectory(trajectory)
-
-    #for _ in range(n_traj):
-    #    episode = collect_trajectory(actor, env, n_traj_steps)
-    #    calc_discd_vals(episode, gamma, lambda_val)
-    #    for e_t in episode:
-    #        replayBuffer.append([v for v in asdict(e_t).values()])
-
-
 def calc_discd_vals(episode, gamma, lambda_val):
     # Initialize tensors
     advantages = torch.zeros(len(episode), dtype=torch.float32)

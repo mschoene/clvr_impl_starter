@@ -53,8 +53,10 @@ class MimiPPO:
                 minibatch_size = 128,
             ): #this is not a sad smiley but a duck with a very wide mouth
 
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print("--- working on device ", self.device , " ---")
 
-        self.model = model
+        self.model = model.to(self.device)
         self.env = env
         self.env_name = env_name
         self.gamma = gamma
@@ -88,7 +90,6 @@ class MimiPPO:
         self.optimizer = optim.Adam( self.model.parameters(), lr = self.lr)
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 7500, min_lr = 2e-7 )
 
-
     def train(self):
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
@@ -120,6 +121,13 @@ class MimiPPO:
                     for _, sample_batched in enumerate(dataloader):
                         self.model.train()
                         pos_t_batched, actions_batched, action_probas_old_batched, advantage_batched, return_batched, reward_batched = extract_values_from_batch(sample_batched, self.minibatch_size)
+                        
+                        pos_t_batched = pos_t_batched.to(self.device)
+                        actions_batched = actions_batched.to(self.device)
+                        action_probas_old_batched = action_probas_old_batched.to(self.device)
+                        advantage_batched = advantage_batched.to(self.device)
+                        return_batched = return_batched.to(self.device)
+                        reward_batched = reward_batched.to(self.device)
 
                         if(self.do_adv_norm):
                             advantage_batched = get_averaged_tensor(advantage_batched)
