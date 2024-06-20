@@ -135,8 +135,8 @@ def train_one_epoch(epoch_index, tb_writer):
         label_img = sample_batched.images[:, :n_conditioning_frames, ...]
         #labels for rewards
         #labels = sample_batched.rewards['target_x']
-        labels = sample_batched.rewards['vertical_position']
-        #labels = sample_batched.rewards['horizontal_position']
+        #labels = sample_batched.rewards['vertical_position']
+        labels = sample_batched.rewards['horizontal_position']
 
         inputs_pre = torch.stack([torch.unsqueeze(trafo(img), dim=1) for img in inputs_pre], dim=1).transpose(1,0).squeeze(2)
         label_img = torch.stack([torch.unsqueeze(trafo(img), dim=1) for img in label_img], dim=1).transpose(1,0).squeeze(2)
@@ -229,8 +229,8 @@ def do_epochs(EPOCHS=1000):
                 vinputs = vdata.images#[:, :n_conditioning_frames, ...] #take only first n images as inputs (tech not nec since model anyway only uses 3) #TODO make more general
                 vlabel_img = vdata.images#[:, :n_conditioning_frames, ...]
                 #vlabels = vdata.rewards['target_x']
-                vlabels = vdata.rewards['vertical_position']
-                #vlabels = vdata.rewards['horizontal_position']
+                #vlabels = vdata.rewards['vertical_position']
+                vlabels = vdata.rewards['horizontal_position']
 
                 vinputs = vinputs.to(device)
                 vlabels = vlabels.to(device)
@@ -287,9 +287,9 @@ def do_epochs(EPOCHS=1000):
         # Track best performance, and save the model's state
         if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1:
             best_vloss = avg_vloss
-            model_path = 'models/repr_decoder_model_{}_{}'.format(timestamp, epoch_number)
+            model_path = 'models/repr_decoder_horiz_model_{}_{}'.format(timestamp, epoch_number)
             torch.save(decoder.state_dict(), model_path)
-            model_path = 'models/repr_encoder_model_{}_{}'.format(timestamp, epoch_number)
+            model_path = 'models/repr_encoder_horiz_model_{}_{}'.format(timestamp, epoch_number)
             torch.save(encoder.state_dict(), model_path)
 
         if  avg_vloss < 0.00001:
