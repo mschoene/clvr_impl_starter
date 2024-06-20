@@ -5,3 +5,4 @@ vessl.key
 vessl.key.pub
 models
 runs
+*.png

@@ -166,15 +166,15 @@ class MimiPPO:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm = self.max_grad_norm )
                         self.optimizer.step()
 
-                        #env step counter (epoch steps are only counted once) #TODO count env steps above instead. optim steps seem quicker in any case
                         if( i_epoch % (self.n_epochs-1)==0 and i_epoch>0): 
                             #counter += self.minibatch_size
                             self.writer.add_scalar('Loss/train', total_loss.item(), counter)
-                            self.writer.add_scalar('Loss/Policy_grad', action_loss.detach().numpy() , counter)
-                            self.writer.add_scalar('Loss/Value', (value_loss.detach().numpy()) , counter)
-                            self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().numpy(), counter)
-                            self.writer.add_scalar('Reward/train', np.array(reward_batched).mean(), counter)
-                            self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'] , counter)
+                            self.writer.add_scalar('Loss/Policy_grad', action_loss.detach().cpu().numpy(), counter)
+                            self.writer.add_scalar('Loss/Value', value_loss.detach().cpu().numpy(), counter)
+                            self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
+                            self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
+                            self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
+
                         #if( i_batch % (20 * self.minibatch_size) == 0 ):
                         #        collect_n_trajectories(self.n_trajectories, self.replayBuffer_eval, self.model, self.env, self.n_traj_steps, self.gamma, self.lambda_val)
                         #        _, _, _, _, _, reward_eval = extract_values_from_batch(self.replayBuffer_eval, len(self.replayBuffer_eval))#
