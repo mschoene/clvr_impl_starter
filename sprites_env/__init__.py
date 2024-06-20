@@ -19,6 +19,12 @@ register(
     kwargs={'n_distractors': 2}
 )
 
+register(
+    id='Sprites-v3',
+    entry_point='sprites_env.envs.sprites:SpritesEnv',
+    kwargs={'n_distractors': 3}
+)
+
 #### State-based follower envs. ####
 register(
     id='SpritesState-v0',
@@ -32,11 +38,16 @@ register(
     kwargs={'n_distractors': 1}
 )
 
-
 register(
     id='SpritesState-v2',
     entry_point='sprites_env.envs.sprites:SpritesStateEnv',
     kwargs={'n_distractors': 2}
+)
+
+register(
+    id='SpritesState-v3',
+    entry_point='sprites_env.envs.sprites:SpritesStateEnv',
+    kwargs={'n_distractors': 3}
 )
 
 #### Image-based repel envs. ####

@@ -1,14 +1,60 @@
 import torch.nn as nn
 import math
 import torch
-from torch.distributions import MultivariateNormal, Normal, Independent
-import numpy as np
+from torch.distributions import MultivariateNormal
 
+# helper function to init weights orthogonally 
 def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.orthogonal_(m.weight)
         m.bias.data.fill_(0.01)
 
+
+
+###############################################################
+### MLP for arbitrary many MLP layers ###
+###############################################################
+class MLP(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_size=32, num_layers=3, do_final_activ = False):
+        super(MLP, self).__init__()
+        layers = []
+        # Input layer
+        layers.append(nn.Linear(input_dim, hidden_size))
+        layers.append(nn.ReLU())
+        # Hidden layers
+        for _ in range(num_layers - 1):
+            layers.append(nn.Linear(hidden_size, hidden_size))
+            layers.append(nn.ReLU())
+        # Output layer
+        layers.append(nn.Linear(hidden_size, output_dim))
+        # Add a final activation if needed
+        if do_final_activ:
+            layers.append(nn.ReLU())
+        self.network = nn.Sequential(*layers)
+    def forward(self, x):
+        return self.network(x)
+    
+############################################################### #TODO refactor in favor of the more general model above
+### Three layer MLP, takes an input, output and hidden size ###
+###############################################################
+class MLP3(nn.Module):
+    def __init__(self,input_size, output_size, hidden_size=32):
+        super(MLP3, self).__init__()
+        self.mlp_layers = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),        
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size),
+        )
+    def forward(self, x):
+        return self.mlp_layers(x)
+
+###############################################################
+### Encoder ###
+###############################################################
 
 class ImageEncoder(nn.Module):
     def __init__(self, input_channels, output_size):
@@ -62,6 +108,9 @@ class ImageEncoder(nn.Module):
  #       )
 
     def forward(self, x):
+        if x.dim() == 3:
+            x = x.unsqueeze(0)
+        #print(x.shape)
         return self.conv_layers(x)
         
 #        self.conv_layers = self._create_conf_layers()
@@ -83,6 +132,10 @@ class ImageEncoder(nn.Module):
 #
 
 
+
+###############################################################
+### Decoder ###
+###############################################################
 class ImageDecoder(nn.Module):
     def __init__(self, input_channels, output_size):
         super(ImageDecoder, self).__init__()
@@ -140,7 +193,9 @@ class ImageDecoder(nn.Module):
 
 
 
-
+###############################################################
+### Autoencoder ###
+###############################################################
 class AE(nn.Module):
     def __init__(self, encoder, decoder):
         super(AE, self).__init__()
@@ -154,25 +209,11 @@ class AE(nn.Module):
         reconstructed_image = self.decoder(latent_space)
         return reconstructed_image
     
- 
 
-#3 layer MLP, takes an input, output and hidden size
-class MLP3(nn.Module):
-    def __init__(self,input_size, output_size, hidden_size=32):
-        super(MLP3, self).__init__()
-        self.mlp_layers = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
-            nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.BatchNorm1d(hidden_size),        
-            nn.ReLU(),
-            nn.Linear(hidden_size, output_size),
-        )
-    def forward(self, x):
-        return self.mlp_layers(x)
  
-
+###############################################################
+### Predictor model  ###
+###############################################################
 class Predictor(nn.Module):
     def __init__(self, input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=64, n_layers_lstm=1, hidden_size=32):
         super(Predictor, self).__init__()
@@ -243,64 +284,172 @@ class RewardPredictor(nn.Module):
         return outputs
     
 
-class CNN(nn.Module):
-    def __init__(self, input_channels=1 , kernel_size=3, stride=2): 
-        super(CNN, self).__init__()
-        self.layer1 = nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride)
-        self.layer2 = nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride)
-        self.layer3 = nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride)
-        self.fc1 = nn.Linear(16*(16-1)*3, 64)  #channel-1 xchannel x n_kernels
-        self.fc2 = nn.Linear(64, 64)  #channel-1 xchannel x n_kernels
-        self.fc_actor = nn.Linear(64, 64) 
-        self.fc_critic = nn.Linear(64, 64) 
-        self.relu = nn.ReLU()
-        self.sig = nn.Sigmoid()
-        self.actions = nn.Linear(64, 2)
-
-        self.value_out = nn.Sequential(nn.Linear(64, 1) )#, nn.Sigmoid())
-
-    def forward(self, x):
-        x = self.relu(self.layer1(x))
-        x = self.relu(self.layer2(x))
-        x = self.relu(self.layer3(x))
-        #Flatten
-        x = x.view(x.size(0), -1) 
-        x = self.fc1(x)
-        x = self.fc2(x)
-        critic = self.value_out(x)
-
-        action = self.actions(x)
-        action_proba = self.sig(action) 
-        return action, action_proba, critic
 
 
 
 
-#continous action space oracle model
-class Oracle(nn.Module):
-    def __init__(self, obs_dim, action_space, action_std_init, hidden_dim = 32):
-        super(Oracle,self).__init__()
-        self.size = hidden_dim
+###############################################################
+### Image-scratch model: use encoder with MLPs for AC ###
+###############################################################
+class ImgScratch(nn.Module):
+    def __init__(self, encoder, obs_dim, action_space, action_std_init):
+        super(ImgScratch).__init__()
+        self.encoder = encoder
         self.input_size = obs_dim
         self.action_dim = action_space
-        self.initial_action_std = action_std_init
+
         self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
-        # shared part of the network
-        self.shared_layers = nn.Sequential(
-            nn.Linear(self.input_size, self.size),
-            nn.Tanh(),
-            nn.Linear(self.size, self.size),
-            nn.Tanh(),
+
+        self.actor = nn.Sequential(MLP(64, self.action_dim, 32, 2, True),  nn.Tanh())
+        self.value = nn.Sequential(MLP(64, 1, 32, 2, True))
+
+    def forward(self, x):
+        return self.encoder(x)
+
+
+##############################################
+### CNN for continous action spaces ###
+##############################################
+class CNN(nn.Module):
+    def __init__(self, mlp_size=64, input_channels=1 , kernel_size=3, stride=2): 
+        super(CNN, self).__init__()
+        self.mlp_size = mlp_size
+  
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.ReLU(),
+            nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.ReLU(),
+            nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.ReLU(),
         )
-        self.critic_layers = nn.Sequential( nn.Linear(self.size, 1) )
-        self.actor_layers = nn.Sequential( nn.Linear(self.size, self.action_dim), nn.Tanh())
+        #self._initialize_flattened_size(input_channels, 64, 64)
+        self.mlp_layers = nn.Sequential(
+            nn.Linear(7*7*16, self.mlp_size ),
+            #nn.Tanh(), # 
+            nn.ReLU(),
+            nn.Linear(self.mlp_size , self.mlp_size ),
+            #nn.Tanh(), # 
+            nn.ReLU(),
+        )
+        self.conv_layers.apply(init_weights)
+        self.mlp_layers.apply(init_weights)
+    
+    def forward(self, x):
+        # unbatched case, we unsqueeze the first dimenson to get a "batch" dim
+        if x.dim() == 3:
+            x = x.unsqueeze(0)
+        x = self.conv_layers(x)
+        # Flatten the output from the CNN keeping the batch size
+        x = x.view(x.size(0), -1)  
+        # Forward pass through MLP
+        x = self.mlp_layers(x)
+        return x
+    
+
+###############################################################
+### Policy maker: given an encoder make it into a MimiPPOP  ###
+###############################################################
+class MimiPPOPolicy(nn.Module):
+    def __init__(self, enc, obs_dim, action_space, action_std_init,encoder_output_size= 64, separate_layers=False):
+        super(MimiPPOPolicy, self).__init__()
+
+        self.encoder = enc
+        self.encoder_output_size = encoder_output_size
+        self.input_size = obs_dim
+        self.action_dim = action_space
+
+        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
+
+
+        self.critic_layers = nn.Sequential( nn.Linear(self.encoder_output_size , 1) )
+        self.actor_layers = nn.Sequential( nn.Linear(self.encoder_output_size, self.action_dim), nn.Tanh())
+        if separate_layers:
+            self.actor_layers = nn.Sequential(MLP(self.encoder_output_size , self.action_dim, 32, 2),  nn.Tanh())
+            self.critic_layers = nn.Sequential(MLP(self.encoder_output_size , 1, 32, 2))
+
 
         self.actor_layers.apply(init_weights)
         self.critic_layers.apply(init_weights)
-        self.shared_layers.apply(init_weights)
 
     def forward(self, x):
-        x = self.shared_layers(x)
+        x = self.encoder(x)
+        value = self.critic_layers(x)
+        actor_output = self.actor_layers(x)
+        action_cov = torch.diag(self.action_std)
+        dist = MultivariateNormal(actor_output, action_cov)
+        return dist, value
+    
+    #return action, action logs probabs and value
+    def act(self, state, deterministic=False):
+        dist, value = self(state)
+        if deterministic:
+            action = dist.mean
+        else:
+            action = dist.rsample()
+        action_log_probs = dist.log_prob(action).sum(dim=-1)
+        return action, action_log_probs, value
+
+    #evaluating model for a given action
+    def evaluate(self, state, action):
+        dist, value = self(state)
+        action_log_probs = dist.log_prob(action).sum(dim=-1)
+        dist_entropy = dist.entropy().sum(dim=-1)
+        return action_log_probs, value, dist_entropy 
+
+##############################################
+### CNN policy for continous action spaces ###
+##############################################
+class CNNPolicy(nn.Module):
+    def __init__(self, obs_dim, action_space, action_std_init, mlp_size=64, input_channels=1 , kernel_size=3, stride=2): 
+        super(CNNPolicy, self).__init__()
+
+        self.input_size = obs_dim
+        self.action_dim = action_space
+        self.initial_action_std = action_std_init
+        self.mlp_size = mlp_size
+        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
+  
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.ReLU(),
+            nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.ReLU(),
+            nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.ReLU(),
+        )
+        #self._initialize_flattened_size(input_channels, 64, 64)
+        self.mlp_layers = nn.Sequential(
+            nn.Linear(7*7*16, self.mlp_size ),
+            #nn.Tanh(), # 
+            nn.ReLU(),
+            nn.Linear(self.mlp_size , self.mlp_size ),
+            #nn.Tanh(), # 
+            nn.ReLU(),
+        )
+        self.critic_layers = nn.Sequential( nn.Linear(self.mlp_size , 1) )
+        self.actor_layers = nn.Sequential( nn.Linear(self.mlp_size , self.action_dim), nn.Tanh())
+
+        self.actor_layers.apply(init_weights)
+        self.critic_layers.apply(init_weights)
+        self.conv_layers.apply(init_weights)
+        self.mlp_layers.apply(init_weights)
+    
+    def forward(self, x):
+        # unbatched case, we unsqueeze the first dimenson to get a "batch" dim
+        if x.dim() == 3:
+            x = x.unsqueeze(0)
+        x = self.conv_layers(x)
+        # Flatten the output from the CNN keeping the batch size
+        x = x.view(x.size(0), -1)  
+        # Forward pass through MLP
+        x = self.mlp_layers(x)
         value = self.critic_layers(x)
         actor_output = self.actor_layers(x)
         action_cov = torch.diag(self.action_std)
@@ -325,7 +474,62 @@ class Oracle(nn.Module):
         return action_log_probs, value, dist_entropy    
 
 
+###################################################################
+### MLP state space (Oracle) policy for continous action spaces ###
+###################################################################
+class Oracle(nn.Module):
+    #def __init__(self, obs_dim, action_space, action_std_init, hidden_dim = 32):
+    def __init__(self, input_dim, hidden_dim = 32):
+        super(Oracle,self).__init__()
+        self.size = hidden_dim
+        self.input_size = input_dim
+        #self.action_dim = action_space
+        #self.initial_action_std = action_std_init
+        #self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
+        # shared part of the network
+        self.shared_layers = nn.Sequential(
+            nn.Linear(self.input_size, self.size),
+            nn.Tanh(),
+            nn.Linear(self.size, self.size),
+            nn.Tanh(),
+        )
+        #self.critic_layers = nn.Sequential( nn.Linear(self.size, 1) )
+        #self.actor_layers = nn.Sequential( nn.Linear(self.size, self.action_dim), nn.Tanh())
 
+        #self.actor_layers.apply(init_weights)
+        #self.critic_layers.apply(init_weights)
+        #self.shared_layers.apply(init_weights)
+
+    def forward(self, x):
+        x = self.shared_layers(x)
+        return x
+        value = self.critic_layers(x)
+        actor_output = self.actor_layers(x)
+        action_cov = torch.diag(self.action_std)
+        dist = MultivariateNormal(actor_output, action_cov)
+        return dist, value
+    
+ #   #return action, action logs probabs and value
+ #   def act(self, state, deterministic=False):
+ #       dist, value = self(state)
+ #       if deterministic:
+ #           action = dist.mean
+ #       else:
+ #           action = dist.rsample()
+ #       action_log_probs = dist.log_prob(action).sum(dim=-1)
+ #       return action, action_log_probs, value
+#
+ #   #evaluating model for a given action
+ #   def evaluate(self, state, action):
+ #       dist, value = self(state)
+ #       action_log_probs = dist.log_prob(action).sum(dim=-1)
+ #       dist_entropy = dist.entropy().sum(dim=-1)
+ #       return action_log_probs, value, dist_entropy    
+
+
+#########################################################
+### MLP state spcae policy for discreet action spaces ###
+#########################################################
 class Oracle_discret(nn.Module):
     def __init__(self, input_size, n_classes):
         super(Oracle_discret,self).__init__()

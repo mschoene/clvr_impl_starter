@@ -2,17 +2,17 @@ import torch
 from  collections import deque
 from torch.utils.data import Dataset
 
-class trajBuffer(deque):
-        def __init__(self, maxlen =10):
-               super().__init__(maxlen=maxlen)
-                
-        def append_step(self, input_arr):
-                assert len(input_arr) == 4
-                self.append( input_arr )
+#class trajBuffer(deque):
+#    def __init__(self, maxlen =10):
+#        super().__init__(maxlen=maxlen)
+#            
+#    def append_step(self, input_arr):
+#        assert len(input_arr) == 4
+#        self.append( input_arr )
 
 class replayBuffer(deque):
-        def __init__(self, maxlen ):
-                super().__init__(maxlen=maxlen)
+    def __init__(self, maxlen ):
+        super().__init__(maxlen=maxlen)
 
 class NpDataset(Dataset):
     def __init__(self, array):

@@ -2,6 +2,11 @@ import torch
 import numpy as np
 from dataclasses import dataclass, asdict
 from rl_utils.torch_utils import np_to_torch
+import concurrent.futures
+import gym
+
+import multiprocessing as mp
+
 
 @dataclass
 class episodeStep():
@@ -24,8 +29,10 @@ def collect_trajectory_step(actor, state, env, episode):
     episode.append(episodeStep(state, action, action_proba, reward, next_state_obs, done, value ) )
     return next_pos_t, done
 
-def collect_trajectory(actor, env, max_steps):
+def collect_trajectory(seed, actor, env_name, max_steps):
     episode = []
+    env = gym.make(env_name)
+    env.seed(seed)
     state = env.reset()
     state = np_to_torch(state)
     with torch.no_grad():
@@ -37,12 +44,48 @@ def collect_trajectory(actor, env, max_steps):
             state = pos_t # init state for next step 
     return episode
 
-def collect_n_trajectories(n_traj, replayBuffer, actor, env, n_traj_steps, gamma, lambda_val):
-    for _ in range(n_traj):
-        episode = collect_trajectory(actor, env, n_traj_steps)
-        calc_discd_vals(episode, gamma, lambda_val)
-        for e_t in episode:
-            replayBuffer.append([v for v in asdict(e_t).values()])
+
+
+def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, gamma, lambda_val, n_workers = 4):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
+        futures = []
+        seeds = np.random.randint(0, 10000, size=n_traj)
+        for seed in seeds: #for _ in range(n_traj):
+            future = executor.submit(collect_trajectory, seed, actor, env_name, n_traj_steps)
+            calc_discd_vals(future.result(), gamma, lambda_val)
+            futures.append(future)
+
+        for future in concurrent.futures.as_completed(futures):
+            trajectory = future.result()
+            #calc_discd_vals(trajectory, gamma, lambda_val)
+            for e_t in trajectory:
+                replayBuffer.append([v for v in asdict(e_t).values()])
+
+
+
+#def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, gamma, lambda_val, n_workers = 4):
+#    with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
+#        futures = []
+#        
+#        for _ in range(n_traj):
+#            future = executor.submit(collect_trajectory, actor, env_name, n_traj_steps)
+#            calc_discd_vals(future.result(), gamma, lambda_val)
+#            futures.append(future)
+#
+#        for future in concurrent.futures.as_completed(futures):
+#            trajectory = future.result()
+#            #calc_discd_vals(trajectory, gamma, lambda_val)
+#            for e_t in trajectory:
+#                replayBuffer.append([v for v in asdict(e_t).values()])
+
+            #print(len(replayBuffer))
+            #replayBuffer.add_trajectory(trajectory)
+
+    #for _ in range(n_traj):
+    #    episode = collect_trajectory(actor, env, n_traj_steps)
+    #    calc_discd_vals(episode, gamma, lambda_val)
+    #    for e_t in episode:
+    #        replayBuffer.append([v for v in asdict(e_t).values()])
 
 
 def calc_discd_vals(episode, gamma, lambda_val):

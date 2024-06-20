@@ -8,3 +8,4 @@ torchviz
 tensorboard
 torchsummary
 torchvision
+wandb

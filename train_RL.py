@@ -3,33 +3,88 @@ import numpy as np
 from general_utils import AttrDict
 from sprites_env.envs.sprites import SpritesEnv 
 from replayBuffer import *
-from models import Oracle
+from models import Oracle, CNN, MimiPPOPolicy, ImageEncoder
 from rl_utils.traj_utils import *
-from rl_utils.ppo import PPO
+from rl_utils.ppo import MimiPPO
+import argparse
+import wandb
 
-data_spec = AttrDict(
-        resolution=64,
-        max_ep_len=400,
-        max_speed=0.05,      # total image range [0, 1]
-        obj_size=0.2,       # size of objects, full images is 1.0
-        follow=True)
+wandb.init(
+    project="clvr_starter",
+    config={
+        "dataset": "sprites",
+    
+    })
 
-n_distractors = 0 
-env = SpritesEnv(n_distractors = n_distractors)
-env = gym.make('SpritesState-v0')
-env.seed(1)
-env.set_config(data_spec)
+def main(args):
 
-actions_space_std = 0.5 
-Oracle_model = Oracle(env.observation_space.shape[0], env.action_space.shape[0], actions_space_std ) 
+    actions_space_std = 0.5
+    ent_coef = args.ent_coef
+    minibatch_size = args.minibatch_size
+
+    model_name = args.model_name.lower()
+    policy_input_dim = 64
+    env_name = f'Sprites-v{args.n_distractors}'
+    separate_ac_mlps = False
+
+    if model_name == 'oracle':
+        ent_coef = 0.05
+        minibatch_size = 64
+        env_name = f'SpritesState-v{args.n_distractors}'
+        env = gym.make(env_name)
+        encoder = Oracle(env.observation_space.shape[0])
+        policy_input_dim =32
+    elif model_name == 'cnn':
+        ent_coef=0.0005
+        encoder = CNN()
+        #policy = MimiPPOPolicy(encoder=cnn_encoder, obs_dim=obs_dim, action_space=action_space, action_std_init=action_std_init, encoder_output_size=encoder_output_size)
+    elif model_name == 'img':
+        encoder = ImageEncoder(1, 64)
+        separate_ac_mlps = True
+        ent_coef=0.0005
+
+    elif model_name =="enc":
+        encoder = ImageEncoder
+        separate_ac_mlps = True
+        ent_coef=0.001
 
 
-ppo_trainer = PPO(Oracle_model, env)
-print("starting training ")
-ppo_trainer.train()
-print("done training")
+    else:
+        raise ValueError(f"Unknown model name: {model_name}")
+
+    env = gym.make(env_name)
+    env.seed(1)
+
+    #model = model_cls(env.observation_space.shape[0], env.action_space.shape[0], actions_space_std)
+    model = MimiPPOPolicy(enc=encoder, 
+                          obs_dim=env.observation_space.shape[0], 
+                          action_space=env.action_space.shape[0], 
+                          action_std_init=actions_space_std, 
+                          encoder_output_size=policy_input_dim,
+                          separate_layers=separate_ac_mlps
+                          )
+    ppo_trainer = MimiPPO(model, env, env_name, std_coef=args.std_coef, ent_coef=ent_coef, minibatch_size=minibatch_size)
+
+    #ppo_trainer = MimiPPO( model, env)
+    #ppo_trainer = MimiPPO( model, env, std_coef=0.2, ent_coef= 0.0015 ,  minibatch_size=128)
+    print("=========== starting training ===========")
+    ppo_trainer.train()
+    print("===========   done training   ===========")
 
 
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train MimiPPO model with specified parameters.")
+    parser.add_argument('--model_name', type=str, required=True, help="Model name to use ('oracle', 'cnn', 'enc', 'enc_ft', 'repr', 'repr_ft').")
+    parser.add_argument('--std_coef', type=float, default=0.2, help="Standard deviation coefficient.")
+    parser.add_argument('--ent_coef', type=float, default=0.0015, help="Entropy coefficient.")
+    parser.add_argument('--minibatch_size', type=int, default=128, help="Minibatch size.")
+    parser.add_argument('--n_distractors', type=int, choices=range(4), default=0, help="Number of distractors (0 to 3).")
+
+    args = parser.parse_args()
+    wandb.config.update(args)
+
+    main(args)
 
 
 #rollout = repBuf(-10, -1)
@@ -54,68 +109,63 @@ print("done training")
 #    obs, reward, done, info = env.step([0, 0])
 #    cv2.imwrite("test_rl_1.png", 255 * np.expand_dims(obs, -1))
 
-# actions taken
-x_values = []
-y_values = []
+def make_histos(ppo_trainer):
+    # actions taken
+    x_values = []
+    y_values = []
 
-#print(repBuf[0][1][0])
-for item in range(len(ppo_trainer.replayBuffer)):
-    x, y = ppo_trainer.replayBuffer[item][1][0].tolist()
-    x_values.append(x)
-    y_values.append(y)
-x_values = np.array(x_values)
-y_values = np.array(y_values)
+    #print(repBuf[0][1][0])
+    for item in range(len(ppo_trainer.replayBuffer)):
+        x, y = ppo_trainer.replayBuffer[item][1][0].tolist()
+        x_values.append(x)
+        y_values.append(y)
+    x_values = np.array(x_values)
+    y_values = np.array(y_values)
 
-import matplotlib.pyplot as plt
-plt.figure(figsize=(10, 5))
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(10, 5))
 
-plt.subplot(1, 2, 1)
-plt.hist(x_values, bins=100, color='blue', alpha=0.7)
-plt.title('Histogram of X actions values')
-plt.xlabel('X')
-plt.ylabel('Frequency')
+    plt.subplot(1, 2, 1)
+    plt.hist(x_values, bins=100, color='blue', alpha=0.7)
+    plt.title('Histogram of X actions values')
+    plt.xlabel('X')
+    plt.ylabel('Frequency')
 
-plt.subplot(1, 2, 2)
-plt.hist(y_values, bins=100, color='green', alpha=0.7)
-plt.title('Histogram of Y actions values')
-plt.xlabel('Y')
-plt.ylabel('Frequency')
-plt.tight_layout()
+    plt.subplot(1, 2, 2)
+    plt.hist(y_values, bins=100, color='green', alpha=0.7)
+    plt.title('Histogram of Y actions values')
+    plt.xlabel('Y')
+    plt.ylabel('Frequency')
+    plt.tight_layout()
 
-plt.savefig('histograms_actions.png')
+    plt.savefig('histograms_actions.png')
 
+    x_values = []
+    y_values = []
 
+    #print(repBuf[0][1][0])
+    for item in range(len(ppo_trainer.replayBuffer)):
+        x, y = ppo_trainer.replayBuffer[item][0][0][0:2].tolist()
+        x_values.append(x)
+        y_values.append(y)
+    x_values = np.array(x_values)
+    y_values = np.array(y_values)
 
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(10, 5))
 
+    plt.subplot(1, 2, 1)
+    plt.hist(x_values, bins=100, color='blue', alpha=0.7)
+    plt.title('Histogram of X pos agent')
+    plt.xlabel('X')
+    plt.ylabel('Frequency')
 
+    plt.subplot(1, 2, 2)
+    plt.hist(y_values, bins=100, color='green', alpha=0.7)
+    plt.title('Histogram of Y pos agent')
+    plt.xlabel('Y')
+    plt.ylabel('Frequency')
+    plt.tight_layout()
 
-
-x_values = []
-y_values = []
-
-#print(repBuf[0][1][0])
-for item in range(len(ppo_trainer.replayBuffer)):
-    x, y = ppo_trainer.replayBuffer[item][0][0][0:2].tolist()
-    x_values.append(x)
-    y_values.append(y)
-x_values = np.array(x_values)
-y_values = np.array(y_values)
-
-import matplotlib.pyplot as plt
-plt.figure(figsize=(10, 5))
-
-plt.subplot(1, 2, 1)
-plt.hist(x_values, bins=100, color='blue', alpha=0.7)
-plt.title('Histogram of X pos agent')
-plt.xlabel('X')
-plt.ylabel('Frequency')
-
-plt.subplot(1, 2, 2)
-plt.hist(y_values, bins=100, color='green', alpha=0.7)
-plt.title('Histogram of Y pos agent')
-plt.xlabel('Y')
-plt.ylabel('Frequency')
-plt.tight_layout()
-
-plt.savefig('histograms.png')
+    plt.savefig('histograms.png')
 
