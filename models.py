@@ -70,68 +70,25 @@ class ImageEncoder(nn.Module):
         out_channels = 4
         for _ in range(int(math.log2(self.output_size))):
             layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
-            layers.append(nn.BatchNorm2d(out_channels))  # Add BatchNorm layer after Conv2d
+            layers.append(nn.BatchNorm2d(out_channels))  
             layers.append(nn.ReLU())
-            #layers.append(nn.Dropout2d(self.dropout_prob))  # Add dropout layer
             layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
             in_channels = out_channels
             out_channels *= 2
-        # Additional convolutional layer to reduce height and width to 1x1
         out_channels /= 2
         out_channels = int(out_channels)
+        # Additional convolutional layer to reduce height and width to 1x1
         layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
-        layers.append(nn.BatchNorm2d(out_channels))  # Add BatchNorm layer after Conv2d
+        layers.append(nn.BatchNorm2d(out_channels))  
         layers.append(nn.ReLU())
         layers.append(nn.Flatten())
-        #layers.append(nn.Linear(out_channels,64))
-        #layers.append(nn.BatchNorm1d(64))
-        #layers.append(nn.ReLU())
         layers.append(nn.Linear(128, 64))
-        #layers.append(nn.Linear(64, 64))
         return nn.Sequential(*layers)
-    
- #       self.conv_layers = nn.Sequential(
- #           nn.Conv2d(3, 4, kernel_size=4, stride=2, padding=1),
- #           nn.ReLU(),
- #           nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=1),
- #           nn.ReLU(),
- #           nn.Conv2d(8, 16, kernel_size=4, stride=2, padding=1),
- #           nn.ReLU(),
- #           nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1),
- #           nn.ReLU(),
- #           nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),
- #           nn.ReLU(),
- #           nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
- #           nn.ReLU(),
- #           nn.Flatten(),
- #           nn.Linear(128, 64)
- #       )
 
     def forward(self, x):
-        if x.dim() == 3:
+        if x.dim() == 3: #taking care of unbatched case
             x = x.unsqueeze(0)
-        #print(x.shape)
         return self.conv_layers(x)
-        
-#        self.conv_layers = self._create_conf_layers()
-#        #self.batchnorm = nn.BatchNorm2d(num_features=output_size)  # Adjust the number of features
-#        self.dropout = nn.Dropout(p=0.5)  # Adjust the dropout probability
-#
-#    def _create_conf_layers(self):
-#        layers = []
-#        in_channels = self.input_channels
-#        out_channels = 4 #init
-#        for _ in range(int(math.log2(self.output_size))):
-#            layers.append(nn.Conv2d(  in_channels=in_channels, out_channels=out_channels, kernel_size=4, stride=2, padding = 1))
-#            layers.append(nn.ReLU())
-#            in_channels = out_channels
-#            out_channels *= 2  # Double the number of channels
-#        out_channels /= 2  # undo the last double for output layer
-#        layers.append(nn.Linear(int(out_channels), self.output_size) )
-#        return nn.Sequential(*layers)
-#
-
-
 
 ###############################################################
 ### Decoder ###
@@ -162,7 +119,7 @@ class ImageDecoder(nn.Module):
             nn.ConvTranspose2d(8, 4, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 4, 32, 32]
             nn.ReLU(),
             nn.ConvTranspose2d(4, 1, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 3, 64, 64]
-            nn.Tanh()  # Apply sigmoid activation to ensure output values are in [0, 1]
+            nn.Tanh()  # activation
         )
     def forward(self, x):
         for layer in self.conv_layers:
@@ -183,7 +140,7 @@ class ImageDecoder(nn.Module):
 #            #layers.append(nn.ReLU())
 #            layers.append(nn.Tanh())
 #            in_channels = out_channels  # Set the number of input channels for the next layer
-#            out_channels //= 2  # Halve the number of channels
+#            out_channels //= 2  # Half the number of channels
 #        
 #        # Add the final convolutional layer to generate the output image
 #        layers.append(nn.ConvTranspose2d(in_channels, 1, kernel_size=4, stride=2, padding=1))
@@ -232,16 +189,16 @@ class Predictor(nn.Module):
                             batch_first = True).to(self.device)
         
         self.mlp_enc = nn.Sequential(
-            MLP3(output_size * n_cond_frames, output_size = self.lstm_output_size),
+            MLP3(output_size , output_size = self.lstm_output_size),
+            #MLP3(output_size * n_cond_frames, output_size = self.lstm_output_size),
         ).to(self.device)
 
     def forward(self, x):
         conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
-        merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) #TODO fix for batch to dim 1?
+        #merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) #TODO fix for batch to dim 1?
         #TODO Fix this to take the frames sequentially in
 
-        mlp_output = self.mlp_enc(merged_embedding) #TODO check if needs to be split in 3?
-        mlp_output = mlp_output.unsqueeze(1) #TODO check 
+
 
         h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial hidden state
         c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial cell state
@@ -249,8 +206,19 @@ class Predictor(nn.Module):
         #TODO fix range to end of traj/max len of traj
         #output_sequence = []
         outputs_list = []
-        input_t = mlp_output
 
+        #condition with n conditioning frames
+        for i_step in range( self.n_cond_frames):
+            mlp_output = self.mlp_enc(conv_embeddings[i_step]) #TODO check if needs to be split in 3?
+            mlp_output = mlp_output.unsqueeze(1) #TODO check 
+            input_t = mlp_output
+
+            lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
+            #outputs_list.append(h0[-1].unsqueeze(1))
+            #without teacher forcign #TODO check if teacher forcing is nec.
+            #input_t = lstm_outstep
+
+        #then just roll
         for i_step in range(self.n_pred_frames):
             lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
             outputs_list.append(h0[-1].unsqueeze(1))
@@ -260,6 +228,34 @@ class Predictor(nn.Module):
         # Concatenate predicted outputs along the sequence dimension = [nb, >ns<]
         outputs = torch.stack(outputs_list, dim=1).squeeze(2)
         return outputs
+    
+
+
+#    def forward(self, x):
+#        conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
+#        merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) #TODO fix for batch to dim 1?
+#        #TODO Fix this to take the frames sequentially in
+#
+#        mlp_output = self.mlp_enc(merged_embedding) #TODO check if needs to be split in 3?
+#        mlp_output = mlp_output.unsqueeze(1) #TODO check 
+#
+#        h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial hidden state
+#        c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial cell state
+#
+#        #TODO fix range to end of traj/max len of traj
+#        #output_sequence = []
+#        outputs_list = []
+#        input_t = mlp_output
+#
+#        for i_step in range(self.n_pred_frames):
+#            lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
+#            outputs_list.append(h0[-1].unsqueeze(1))
+#            #without teacher forcign #TODO check if teacher forcing is nec.
+#            input_t = lstm_outstep
+#
+#        # Concatenate predicted outputs along the sequence dimension = [nb, >ns<]
+#        outputs = torch.stack(outputs_list, dim=1).squeeze(2)
+#        return outputs
 
 
 class RewardPredictor(nn.Module):
@@ -267,7 +263,8 @@ class RewardPredictor(nn.Module):
         super(RewardPredictor, self).__init__()
         self.n_pred_frames = n_pred_frames
         self.n_heads = n_heads
-        self.heads = nn.ModuleList([  nn.Sequential(MLP3(lstm_output_size, output_size=1), nn.Sigmoid()) for _ in range(self.n_heads)  ])
+        self.heads = nn.ModuleList([nn.Sequential(MLP3(lstm_output_size, output_size=1), nn.Sigmoid()) for _ in range(self.n_heads)  ])
+
 
     def forward(self, x):
         batch_size, n_frames, *other_dims = x.size()
@@ -364,13 +361,11 @@ class MimiPPOPolicy(nn.Module):
 
         self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
 
-
         self.critic_layers = nn.Sequential( nn.Linear(self.encoder_output_size , 1) )
         self.actor_layers = nn.Sequential( nn.Linear(self.encoder_output_size, self.action_dim), nn.Tanh())
         if separate_layers:
             self.actor_layers = nn.Sequential(MLP(self.encoder_output_size , self.action_dim, 32, 2),  nn.Tanh())
             self.critic_layers = nn.Sequential(MLP(self.encoder_output_size , 1, 32, 2))
-
 
         self.actor_layers.apply(init_weights)
         self.critic_layers.apply(init_weights)

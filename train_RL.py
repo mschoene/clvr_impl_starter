@@ -9,12 +9,20 @@ from rl_utils.ppo import MimiPPO
 import argparse
 import wandb
 
-wandb.init(
-    project="clvr_starter",
-    config={
-        "dataset": "sprites",
-    
-    })
+def load_pretrained_weights(model, pretrained_path):
+    model.load_state_dict(torch.load(pretrained_path))
+    return model
+
+#Freeze params with True
+def set_parameter_requires_grad(model, requires_grad=False):
+    for param in model.parameters():
+        param.requires_grad = requires_grad
+
+#wandb.init(
+#    project="clvr_starter",
+#    config={
+#        "dataset": "sprites",
+#    })
 
 def main(args):
 
@@ -42,15 +50,36 @@ def main(args):
         encoder = ImageEncoder(1, 64)
         separate_ac_mlps = True
         ent_coef=0.0005 
+
     elif model_name =="enc": #pretrained encoder, frozen
-        encoder = ImageEncoder
+        pretrained_path = "models/encoder_model_20240620_195827_9"
+        encoder = ImageEncoder(1, 64)
+        encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        ent_coef=0.001    
+        ent_coef=0.001 
+        set_parameter_requires_grad(encoder, requires_grad=False)
     elif model_name =="enc_ft": #pretrained encoder, fine tuning
-        encoder = ImageEncoder
+        pretrained_path = "models/encoder_model_20240620_195827_9"
+        encoder = ImageEncoder(1, 64)
+        encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
         ent_coef=0.001
+        set_parameter_requires_grad(encoder, requires_grad=True)
 
+    elif model_name == "repr": # pretrained representation encoder
+        pretrained_path = "models/encoder_model_20240620_195827_9"
+        encoder = ImageEncoder(1, 64)
+        encoder = load_pretrained_weights(encoder, pretrained_path)
+        separate_ac_mlps = True
+        ent_coef=0.001    
+        set_parameter_requires_grad(encoder, requires_grad=False)
+    elif model_name =="repr_ft": #pretrained representation encoder, fine tuning
+        pretrained_path = "models/encoder_model_20240620_195827_9"
+        encoder = ImageEncoder(1, 64)
+        encoder = load_pretrained_weights(encoder, pretrained_path)
+        separate_ac_mlps = True
+        ent_coef=0.001
+        set_parameter_requires_grad(encoder, requires_grad=True)
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
@@ -92,7 +121,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_episodes', type=int, choices=range(5000), default=500, help="Number of episodes, default 500.")
 
     args = parser.parse_args()
-    wandb.config.update(args)
+    #wandb.config.update(args)
 
     main(args)
 

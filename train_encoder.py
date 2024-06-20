@@ -76,10 +76,10 @@ output_size = spec['resolution']  #64
 
 
 
-train_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples)
-valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=batch_size*4)
-#train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
-#valid_ds = MovingSpriteDataset(spec=spec, num_samples=batch_size*4)
+#train_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples)
+#valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=batch_size*4)
+train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
+valid_ds = MovingSpriteDataset(spec=spec, num_samples=batch_size*4)
 
 
 dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=2)
@@ -235,7 +235,7 @@ def do_epochs(EPOCHS=1000):
 
         epoch_number += 1
 
-do_epochs(500)
+do_epochs(10)
 
 
 

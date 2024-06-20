@@ -287,8 +287,10 @@ def do_epochs(EPOCHS=1000):
         # Track best performance, and save the model's state
         if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1:
             best_vloss = avg_vloss
-            model_path = 'models/decoder_model_{}_{}'.format(timestamp, epoch_number)
+            model_path = 'models/repr_decoder_model_{}_{}'.format(timestamp, epoch_number)
             torch.save(decoder.state_dict(), model_path)
+            model_path = 'models/repr_encoder_model_{}_{}'.format(timestamp, epoch_number)
+            torch.save(encoder.state_dict(), model_path)
 
         if  avg_vloss < 0.00001:
             break
