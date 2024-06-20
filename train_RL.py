@@ -41,13 +41,15 @@ def main(args):
     elif model_name == 'img':
         encoder = ImageEncoder(1, 64)
         separate_ac_mlps = True
-        ent_coef=0.0005
-
-    elif model_name =="enc":
+        ent_coef=0.0005 
+    elif model_name =="enc": #pretrained encoder, frozen
+        encoder = ImageEncoder
+        separate_ac_mlps = True
+        ent_coef=0.001    
+    elif model_name =="enc_ft": #pretrained encoder, fine tuning
         encoder = ImageEncoder
         separate_ac_mlps = True
         ent_coef=0.001
-
 
     else:
         raise ValueError(f"Unknown model name: {model_name}")
