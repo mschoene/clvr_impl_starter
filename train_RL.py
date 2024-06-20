@@ -71,7 +71,7 @@ def main(args):
                           std_coef=args.std_coef, 
                           ent_coef=ent_coef, 
                           minibatch_size=minibatch_size,
-                          n_epochs=args.n_epochs                          
+                          n_episodes=args.n_episodes                          
                           )
 
     #ppo_trainer = MimiPPO( model, env)
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.0015, help="Entropy coefficient.")
     parser.add_argument('--minibatch_size', type=int, default=128, help="Minibatch size.")
     parser.add_argument('--n_distractors', type=int, choices=range(4), default=0, help="Number of distractors (0 to 3).")
-    parser.add_argument('--n_epochs', type=int, choices=range(5000), default=500, help="Number of epochs, default 500.")
+    parser.add_argument('--n_episodes', type=int, choices=range(5000), default=500, help="Number of episodes, default 500.")
 
     args = parser.parse_args()
     wandb.config.update(args)
