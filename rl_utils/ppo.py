@@ -103,7 +103,7 @@ class MimiPPO:
                         print( name, param.data)  
 
             ###  collecting trajectories and appending the episodes to the buffer ###
-            collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
+            collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
             #collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=1)
             #ollect_n_trajectories(4, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=4 )
             ###
