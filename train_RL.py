@@ -9,6 +9,7 @@ from rl_utils.ppo import MimiPPO
 import argparse
 import torch
 import wandb
+import time
 
 def load_pretrained_weights(model, pretrained_path):
     device = torch.device('cpu')
@@ -111,10 +112,13 @@ def main(args):
 
     #ppo_trainer = MimiPPO( model, env)
     #ppo_trainer = MimiPPO( model, env, std_coef=0.2, ent_coef= 0.0015 ,  minibatch_size=128)
+
+    start = time.time()
     print("=========== starting training ===========")
     ppo_trainer.train()
     print("===========   done training   ===========")
-
+    end = time.time()
+    print("finished training in ", end- start , " seconds")
 
 
 if __name__ == "__main__":

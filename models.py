@@ -395,131 +395,25 @@ class MimiPPOPolicy(nn.Module):
         dist_entropy = dist.entropy().sum(dim=-1)
         return action_log_probs, value, dist_entropy 
 
-##############################################
-### CNN policy for continous action spaces ###
-##############################################
-class CNNPolicy(nn.Module):
-    def __init__(self, obs_dim, action_space, action_std_init, mlp_size=64, input_channels=1 , kernel_size=3, stride=2): 
-        super(CNNPolicy, self).__init__()
-
-        self.input_size = obs_dim
-        self.action_dim = action_space
-        self.initial_action_std = action_std_init
-        self.mlp_size = mlp_size
-        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
-  
-        self.conv_layers = nn.Sequential(
-            nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
-            nn.ReLU(),
-            nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
-            nn.ReLU(),
-            nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
-            nn.ReLU(),
-        )
-        #self._initialize_flattened_size(input_channels, 64, 64)
-        self.mlp_layers = nn.Sequential(
-            nn.Linear(7*7*16, self.mlp_size ),
-            #nn.Tanh(), # 
-            nn.ReLU(),
-            nn.Linear(self.mlp_size , self.mlp_size ),
-            #nn.Tanh(), # 
-            nn.ReLU(),
-        )
-        self.critic_layers = nn.Sequential( nn.Linear(self.mlp_size , 1) )
-        self.actor_layers = nn.Sequential( nn.Linear(self.mlp_size , self.action_dim), nn.Tanh())
-
-        self.actor_layers.apply(init_weights)
-        self.critic_layers.apply(init_weights)
-        self.conv_layers.apply(init_weights)
-        self.mlp_layers.apply(init_weights)
-    
-    def forward(self, x):
-        # unbatched case, we unsqueeze the first dimenson to get a "batch" dim
-        if x.dim() == 3:
-            x = x.unsqueeze(0)
-        x = self.conv_layers(x)
-        # Flatten the output from the CNN keeping the batch size
-        x = x.view(x.size(0), -1)  
-        # Forward pass through MLP
-        x = self.mlp_layers(x)
-        value = self.critic_layers(x)
-        actor_output = self.actor_layers(x)
-        action_cov = torch.diag(self.action_std)
-        dist = MultivariateNormal(actor_output, action_cov)
-        return dist, value
-    
-    #return action, action logs probabs and value
-    def act(self, state, deterministic=False):
-        dist, value = self(state)
-        if deterministic:
-            action = dist.mean
-        else:
-            action = dist.rsample()
-        action_log_probs = dist.log_prob(action).sum(dim=-1)
-        return action, action_log_probs, value
-
-    #evaluating model for a given action
-    def evaluate(self, state, action):
-        dist, value = self(state)
-        action_log_probs = dist.log_prob(action).sum(dim=-1)
-        dist_entropy = dist.entropy().sum(dim=-1)
-        return action_log_probs, value, dist_entropy    
 
 
 ###################################################################
 ### MLP state space (Oracle) policy for continous action spaces ###
 ###################################################################
 class Oracle(nn.Module):
-    #def __init__(self, obs_dim, action_space, action_std_init, hidden_dim = 32):
     def __init__(self, input_dim, hidden_dim = 32):
         super(Oracle,self).__init__()
         self.size = hidden_dim
         self.input_size = input_dim
-        #self.action_dim = action_space
-        #self.initial_action_std = action_std_init
-        #self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
-        # shared part of the network
         self.shared_layers = nn.Sequential(
             nn.Linear(self.input_size, self.size),
             nn.Tanh(),
             nn.Linear(self.size, self.size),
             nn.Tanh(),
         )
-        #self.critic_layers = nn.Sequential( nn.Linear(self.size, 1) )
-        #self.actor_layers = nn.Sequential( nn.Linear(self.size, self.action_dim), nn.Tanh())
-
-        #self.actor_layers.apply(init_weights)
-        #self.critic_layers.apply(init_weights)
-        #self.shared_layers.apply(init_weights)
 
     def forward(self, x):
-        x = self.shared_layers(x)
-        return x
-        value = self.critic_layers(x)
-        actor_output = self.actor_layers(x)
-        action_cov = torch.diag(self.action_std)
-        dist = MultivariateNormal(actor_output, action_cov)
-        return dist, value
-    
- #   #return action, action logs probabs and value
- #   def act(self, state, deterministic=False):
- #       dist, value = self(state)
- #       if deterministic:
- #           action = dist.mean
- #       else:
- #           action = dist.rsample()
- #       action_log_probs = dist.log_prob(action).sum(dim=-1)
- #       return action, action_log_probs, value
-#
- #   #evaluating model for a given action
- #   def evaluate(self, state, action):
- #       dist, value = self(state)
- #       action_log_probs = dist.log_prob(action).sum(dim=-1)
- #       dist_entropy = dist.entropy().sum(dim=-1)
- #       return action_log_probs, value, dist_entropy    
+        return self.shared_layers(x)
 
 
 #########################################################

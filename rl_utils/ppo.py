@@ -44,7 +44,7 @@ class MimiPPO:
                 do_a2c = False, 
                 do_std_penalty = True,
 
-                n_trajectories =  4, #16,# 8,
+                n_trajectories =  8, #4, #16,# 8,
                 n_actors = 4,
                 n_traj_steps = 49,
                 lr = 0.0003,
@@ -52,7 +52,7 @@ class MimiPPO:
                 n_episodes = 500,
                 n_epochs =  10,
                 minibatch_size = 128, #256, #128,
-                max_env_steps = 5_000_000,
+                max_env_steps = 5_000_000
             ): #this is not a sad smiley but a duck with a very wide mouth
 
         #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -100,18 +100,15 @@ class MimiPPO:
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
         counter = 0. #this counts the number of environment steps in total
-        next_threshold = 100000
+        next_threshold = 1000
         while(counter < self.max_env_steps):
         #for iteration in range(self.n_episodes):
             if counter >= next_threshold:
-                next_threshold += 100000
+                next_threshold += 1000
                 print("buffer length  ", len(self.replayBuffer), " env steps so far ", counter)
-
-            #if (iteration % 10 == 0 ):
-            #    print("buffer length  ", len(self.replayBuffer), " at iteration " , iteration, " env steps so far ", counter)
-            #    for name, param in self.model.named_parameters():
-            #        if param.requires_grad and "action_std" in name:
-            #            print( name, param.data)  
+                for name, param in self.model.named_parameters():
+                    if param.requires_grad and "action_std" in name:
+                        print( name, param.data)  
 
             #self.model = self.model.to('cpu') 
             ###  collecting trajectories and appending the episodes to the buffer ###
@@ -130,9 +127,11 @@ class MimiPPO:
                     #random_sampler = RandomSampler(data, num_samples = len(self.replayBuffer) ) 
                     #dataloader = DataLoader(data, batch_size = self.minibatch_size , collate_fn=my_collate_fn, sampler=random_sampler, num_workers=4 )
 
-                    dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True, num_workers=16)
+                    dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True) #, num_workers=4)
 
-                    for _, sample_batched in enumerate(dataloader):
+                    #print(enumerate(dataloader))
+                    looper = enumerate(dataloader)
+                    for _, sample_batched in looper:
 
                         self.model.train()
                         pos_t_batched, actions_batched, action_probas_old_batched, advantage_batched, return_batched, reward_batched = extract_values_from_batch(sample_batched, self.minibatch_size)
@@ -174,13 +173,13 @@ class MimiPPO:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm = self.max_grad_norm )
                         self.optimizer.step()
 
-                        if( i_epoch % (self.n_epochs-1)==0 and i_epoch>0): 
-                            self.writer.add_scalar('Loss/train', total_loss.item(), counter)
-                            self.writer.add_scalar('Loss/Policy_grad', action_loss.detach().cpu().numpy(), counter)
-                            self.writer.add_scalar('Loss/Value', value_loss.detach().cpu().numpy(), counter)
-                            self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
-                            self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
-                            self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
+                    if( i_epoch % (self.n_epochs-1)==0 and i_epoch>0): 
+                        self.writer.add_scalar('Loss/train', total_loss.item(), counter)
+                        self.writer.add_scalar('Loss/Policy_grad', action_loss.detach().cpu().numpy(), counter)
+                        self.writer.add_scalar('Loss/Value', value_loss.detach().cpu().numpy(), counter)
+                        self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
+                        self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
+                        #self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
 
         #if (counter > self.max_env_steps):
         print("DONE " , self.max_env_steps , " steps")
