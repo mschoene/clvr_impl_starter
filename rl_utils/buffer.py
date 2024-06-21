@@ -10,10 +10,15 @@ from torch.utils.data import Dataset
 #        assert len(input_arr) == 4
 #        self.append( input_arr )
 
-class replayBuffer(deque):
-    def __init__(self, maxlen ):
-        super().__init__(maxlen=maxlen)
+#class replayBuffer(deque):
+#    def __init__(self, maxlen ):
+#        super().__init__(maxlen=maxlen)
 
+
+class ReplayBuffer(deque):
+    def __init__(self, maxlen):
+        super().__init__(maxlen=maxlen)
+    
 class NpDataset(Dataset):
     def __init__(self, array):
         self.array = array

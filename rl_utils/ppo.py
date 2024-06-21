@@ -44,14 +44,14 @@ class MimiPPO:
                 do_a2c = False, 
                 do_std_penalty = True,
 
-                n_trajectories = 8,# 16,# 8,
+                n_trajectories =  4, #16,# 8,
                 n_actors = 4,
                 n_traj_steps = 49,
                 lr = 0.0003,
                 epsilon = 0.2,
                 n_episodes = 500,
                 n_epochs =  10,
-                minibatch_size = 128,
+                minibatch_size = 128, #256, #128,
                 max_env_steps = 5_000_000,
             ): #this is not a sad smiley but a duck with a very wide mouth
 
@@ -80,7 +80,8 @@ class MimiPPO:
         self.n_episodes = n_episodes#50 #0#500  #total number of iterations over the  data, this will mean M*nEpisodes = #of steps taken
         self.n_epochs =  n_epochs  #number of optim steps on a given buffer data set
 
-        self.buffer_size = 4 * n_actors* (self.n_traj_steps+1)*self.n_trajectories # M = N*T thus defining the number of actors as N = M/T
+        #self.buffer_size = 4 * n_actors* (self.n_traj_steps+1)*self.n_trajectories # M = N*T thus defining the number of actors as N = M/T
+        self.buffer_size = n_actors* (self.n_traj_steps+1)*self.n_trajectories # M = N*T thus defining the number of actors as N = M/T
         #self.buffer_size = 4* 2* 8 * (self.n_traj_steps+1) # M = N*T thus defining the number of actors as N = M/T
 
         self.batch_size = n_actors* (self.n_traj_steps+1)*self.n_trajectories  #256 #512 #1024  #64 #32 #64 #128 #32 #128
@@ -99,9 +100,12 @@ class MimiPPO:
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
         counter = 0. #this counts the number of environment steps in total
-
+        next_threshold = 100000
         while(counter < self.max_env_steps):
         #for iteration in range(self.n_episodes):
+            if counter >= next_threshold:
+                next_threshold += 100000
+                print("buffer length  ", len(self.replayBuffer), " env steps so far ", counter)
 
             #if (iteration % 10 == 0 ):
             #    print("buffer length  ", len(self.replayBuffer), " at iteration " , iteration, " env steps so far ", counter)
@@ -113,7 +117,7 @@ class MimiPPO:
             ###  collecting trajectories and appending the episodes to the buffer ###
             collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
             ###
-            counter += (self.n_trajectories * self.n_actors * self.n_traj_steps)
+            counter += (self.n_trajectories * self.n_actors * (self.n_traj_steps+1))
 
             if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
                 for i_epoch in range(self.n_epochs):   
@@ -123,11 +127,13 @@ class MimiPPO:
                     #if self.device.type == 'cuda':
                     #   self.model.to(self.device)
 
-                    random_sampler = RandomSampler(data, num_samples = len(self.replayBuffer) ) 
-                    dataloader = DataLoader(data, batch_size = self.minibatch_size , collate_fn=my_collate_fn, sampler=random_sampler, num_workers=4 )
+                    #random_sampler = RandomSampler(data, num_samples = len(self.replayBuffer) ) 
+                    #dataloader = DataLoader(data, batch_size = self.minibatch_size , collate_fn=my_collate_fn, sampler=random_sampler, num_workers=4 )
+
+                    dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True, num_workers=16)
 
                     for _, sample_batched in enumerate(dataloader):
-                             
+
                         self.model.train()
                         pos_t_batched, actions_batched, action_probas_old_batched, advantage_batched, return_batched, reward_batched = extract_values_from_batch(sample_batched, self.minibatch_size)
                         
