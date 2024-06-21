@@ -100,11 +100,11 @@ class MimiPPO:
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
         counter = 0. #this counts the number of environment steps in total
-        next_threshold = 1000
+        next_threshold = 10000
         while(counter < self.max_env_steps):
         #for iteration in range(self.n_episodes):
             if counter >= next_threshold:
-                next_threshold += 1000
+                next_threshold += 10000
                 print("buffer length  ", len(self.replayBuffer), " env steps so far ", counter)
                 for name, param in self.model.named_parameters():
                     if param.requires_grad and "action_std" in name:
