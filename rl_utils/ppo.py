@@ -44,7 +44,7 @@ class MimiPPO:
                 do_a2c = False, 
                 do_std_penalty = True,
 
-                n_trajectories =  8, #4, #16,# 8,
+                n_trajectories = 16, # 8, #4, #16,# 8,
                 n_actors = 4,
                 n_traj_steps = 49,
                 lr = 0.0003,

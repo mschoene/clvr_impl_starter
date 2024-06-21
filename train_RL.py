@@ -76,7 +76,7 @@ def main(args):
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        ent_coef=0.001    
+        ent_coef=0.0005   
         set_parameter_requires_grad(encoder, requires_grad=False)
 
     elif model_name =="repr_ft": #pretrained representation encoder, fine tuning
@@ -84,8 +84,9 @@ def main(args):
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        ent_coef=0.001
+        ent_coef=0.0005 
         set_parameter_requires_grad(encoder, requires_grad=True)
+
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
