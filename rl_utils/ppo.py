@@ -29,6 +29,7 @@ from rl_utils.buffer import *
 class MimiPPO:
     def __init__(self, 
                 model, 
+                model_name,
                 env,
                 env_name,
                 gamma=0.99, 
@@ -51,12 +52,15 @@ class MimiPPO:
                 n_episodes = 500,
                 n_epochs =  10,
                 minibatch_size = 128,
+                max_env_steps = 5_000_000,
             ): #this is not a sad smiley but a duck with a very wide mouth
 
         #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.device = torch.device('cpu')
         print("--- working on device ", self.device , " ---")
 
+        self.model_name = model_name
+        self.max_env_steps = max_env_steps
         self.model = model.to(self.device)
         self.env = env
         self.env_name = env_name
@@ -86,25 +90,26 @@ class MimiPPO:
         self.lr = lr
         self.epsilon = epsilon
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.writer = SummaryWriter('runs/RL_training{}'.format(timestamp))
+        self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.writer = SummaryWriter('runs/RL_training_{}_{}'.format(self.model_name, self.timestamp))
         self.optimizer = optim.Adam( self.model.parameters(), lr = self.lr)
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 7500, min_lr = 2e-7 )
 
     def train(self):
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
-        counter = 0. #this count the number of environment steps in total
+        counter = 0. #this counts the number of environment steps in total
 
-        for iteration in range(self.n_episodes):
+        while(counter < self.max_env_steps):
+        #for iteration in range(self.n_episodes):
 
-            if (iteration % 10 == 0 ):
-                print("buffer length  ", len(self.replayBuffer), " at iteration " , iteration, " env steps so far ", counter)
-                for name, param in self.model.named_parameters():
-                    if param.requires_grad and "action_std" in name:
-                        print( name, param.data)  
+            #if (iteration % 10 == 0 ):
+            #    print("buffer length  ", len(self.replayBuffer), " at iteration " , iteration, " env steps so far ", counter)
+            #    for name, param in self.model.named_parameters():
+            #        if param.requires_grad and "action_std" in name:
+            #            print( name, param.data)  
 
-            self.model = self.model.to('cpu') 
+            #self.model = self.model.to('cpu') 
             ###  collecting trajectories and appending the episodes to the buffer ###
             collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
             ###
@@ -171,6 +176,10 @@ class MimiPPO:
                             self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
                             self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
 
+        #if (counter > self.max_env_steps):
+        print("DONE " , self.max_env_steps , " steps")
+        model_path = 'runs/RL_trained_model_{}_{}'.format(self.model_name, self.timestamp)
+        torch.save(self.model.state_dict(), model_path)
                      #scheduler.step(total_loss)
 
 

@@ -100,6 +100,7 @@ def main(args):
                           separate_layers=separate_ac_mlps,
                           )
     ppo_trainer = MimiPPO(model, 
+                          model_name, 
                           env, 
                           env_name, 
                           std_coef=args.std_coef, 
