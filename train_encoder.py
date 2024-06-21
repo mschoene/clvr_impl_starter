@@ -228,7 +228,9 @@ def do_epochs(EPOCHS=1000):
         if (avg_vloss<0.0016) or epoch_number==EPOCHS-1:
             best_vloss = avg_vloss
             model_path = 'models/encoder_model_2obj_{}_{}'.format(timestamp, epoch_number)
-            torch.save(encoder.state_dict(), model_path)
+            torch.save(encoder.state_dict(), model_path)            
+            model_path = 'models/decoder_model_2obj_{}_{}'.format(timestamp, epoch_number)
+            torch.save(decoder.state_dict(), model_path)
 
         #if avg_vloss < 0.00001:
         #    break
