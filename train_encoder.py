@@ -230,8 +230,8 @@ def do_epochs(EPOCHS=1000):
             model_path = 'models/encoder_model_2obj_{}_{}'.format(timestamp, epoch_number)
             torch.save(encoder.state_dict(), model_path)
 
-        if  avg_vloss < 0.00001:
-            break
+        #if avg_vloss < 0.00001:
+        #    break
 
         epoch_number += 1
 

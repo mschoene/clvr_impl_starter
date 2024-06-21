@@ -53,7 +53,8 @@ class MimiPPO:
                 minibatch_size = 128,
             ): #this is not a sad smiley but a duck with a very wide mouth
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cpu')
         print("--- working on device ", self.device , " ---")
 
         self.model = model.to(self.device)
@@ -106,8 +107,6 @@ class MimiPPO:
             self.model = self.model.to('cpu') 
             ###  collecting trajectories and appending the episodes to the buffer ###
             collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
-            #collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=1)
-            #ollect_n_trajectories(4, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=4 )
             ###
             counter += (self.n_trajectories * self.n_actors * self.n_traj_steps)
 
@@ -116,23 +115,23 @@ class MimiPPO:
                     data = NpDataset( ( [ele for ele in self.replayBuffer] ))
                     total_loss = 0.
 
-                    if self.device.type == 'cuda':
-                        self.model.to(self.device)
+                    #if self.device.type == 'cuda':
+                    #   self.model.to(self.device)
 
                     random_sampler = RandomSampler(data, num_samples = len(self.replayBuffer) ) 
-                    dataloader = DataLoader(data, batch_size = self.minibatch_size , collate_fn=my_collate_fn, sampler=random_sampler )
+                    dataloader = DataLoader(data, batch_size = self.minibatch_size , collate_fn=my_collate_fn, sampler=random_sampler, num_workers=4 )
 
                     for _, sample_batched in enumerate(dataloader):
                              
                         self.model.train()
                         pos_t_batched, actions_batched, action_probas_old_batched, advantage_batched, return_batched, reward_batched = extract_values_from_batch(sample_batched, self.minibatch_size)
                         
-                        pos_t_batched = pos_t_batched.to(self.device)
-                        actions_batched = actions_batched.to(self.device)
-                        action_probas_old_batched = action_probas_old_batched.to(self.device)
-                        advantage_batched = advantage_batched.to(self.device)
-                        return_batched = return_batched.to(self.device)
-                        reward_batched = reward_batched.to(self.device)
+                        #pos_t_batched = pos_t_batched.to(self.device)
+                        #actions_batched = actions_batched.to(self.device)
+                        #action_probas_old_batched = action_probas_old_batched.to(self.device)
+                        #advantage_batched = advantage_batched.to(self.device)
+                        #return_batched = return_batched.to(self.device)
+                        #reward_batched = reward_batched.to(self.device)
 
                         if(self.do_adv_norm):
                             advantage_batched = get_averaged_tensor(advantage_batched)
@@ -140,7 +139,7 @@ class MimiPPO:
 
                         #evaluate state action:
                         action_probas_prop, value_prop, entropy_prop = self.model.evaluate(pos_t_batched, actions_batched)
-                        ap_ratio = torch.exp( action_probas_prop- action_probas_old_batched.detach() )
+                        ap_ratio = torch.exp( action_probas_prop- action_probas_old_batched )
 
                         if(self.do_a2c): #do unclipped advantage policy loss
                             action_loss = -( ap_ratio * advantage_batched).mean() 
@@ -154,9 +153,7 @@ class MimiPPO:
                         entropy_loss = - entropy_prop.mean()
 
                         #to keep it from exploding and just going random/max action rather than trying to predict the correct mean
-                        
                         log_std_penalty_loss = self.std_coef * (self.model.action_std).mean()
-                        #log_std_penalty_loss = self.std_coef * ((self.model.action_std)**4).mean()
 
                         # total loss 
                         total_loss = self.vf_coef * value_loss + action_loss + self.ent_coef * entropy_loss + log_std_penalty_loss
@@ -167,22 +164,12 @@ class MimiPPO:
                         self.optimizer.step()
 
                         if( i_epoch % (self.n_epochs-1)==0 and i_epoch>0): 
-                            #counter += self.minibatch_size
                             self.writer.add_scalar('Loss/train', total_loss.item(), counter)
                             self.writer.add_scalar('Loss/Policy_grad', action_loss.detach().cpu().numpy(), counter)
                             self.writer.add_scalar('Loss/Value', value_loss.detach().cpu().numpy(), counter)
                             self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
                             self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
                             self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
-
-                        #if( i_batch % (20 * self.minibatch_size) == 0 ):
-                        #        collect_n_trajectories(self.n_trajectories, self.replayBuffer_eval, self.model, self.env, self.n_traj_steps, self.gamma, self.lambda_val)
-                        #        _, _, _, _, _, reward_eval = extract_values_from_batch(self.replayBuffer_eval, len(self.replayBuffer_eval))#
-#
-#                                self.writer.add_scalar('Reward/eval', np.array(reward_eval).mean(), counter)
-
-                                #if( (i_batch % (1000 * minibatch_size)) == 0) and i_batch >0:
-                                #print('total loss = {:.4f}    policy_grad_loss = {:.10f}   value_loss = {:.4f}   entropy_loss = {:.4f}       batch reward = {:.4f}     eval reward = {:.4f}     last lr = {}'.format(total_loss.item(), action_loss, value_loss, entropy_loss, np.array(reward_batched).mean(), np.array(reward_eval).mean(), scheduler.get_last_lr()))
 
                      #scheduler.step(total_loss)
 

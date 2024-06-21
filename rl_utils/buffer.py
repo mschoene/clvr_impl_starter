@@ -29,25 +29,18 @@ def extract_values_from_batch(batched_data, batch_size):
     is_batched = (batch_size > 1)
     # Extract the required values from the batched data
     if is_batched:
-        ipos_t = [b[0] for b in batched_data] 
-        iaction = [b[1] for b in batched_data] 
-        iaction_probas_old = [b[2] for b in batched_data] 
-        ireward = [b[3] for b in batched_data] 
-        iadvantage = [b[9] for b in batched_data] 
-        iret = [b[8] for b in batched_data] 
+        ipos_t = torch.stack([b[0] for b in batched_data]).to(torch.float32).detach()
+        iaction = torch.stack([b[1] for b in batched_data]).detach()
+        iaction_probas_old = torch.stack([b[2] for b in batched_data]).detach()
+        ireward = torch.tensor([b[3] for b in batched_data]).to(torch.float32).detach()
+        iadvantage = torch.stack([b[7] for b in batched_data]).detach()
+        iret = torch.stack([b[6] for b in batched_data]).detach()
     else:
-        ipos_t = batched_data[0]
-        iaction = batched_data[1]
-        iaction_probas_old = batched_data[2]
-        ireward = batched_data[3] 
-        iadvantage = batched_data[9]
-        iret = batched_data[8]
+        ipos_t = batched_data[0].unsqueeze(0).to(torch.float32)
+        iaction = batched_data[1].unsqueeze(0).detach()
+        iaction_probas_old = batched_data[2].unsqueeze(0).detach()
+        ireward = torch.tensor(batched_data[3]).unsqueeze(0).to(torch.float32)
+        iadvantage = batched_data[7].unsqueeze(0).detach()
+        iret = batched_data[6].unsqueeze(0).detach()
     
-    ipos_t = torch.stack(ipos_t).to(torch.float32)
-    iaction = torch.stack(iaction).detach()
-    iaction_probas_old = torch.stack(iaction_probas_old).detach()
-    iadvantage = torch.stack(iadvantage).detach()
-    iret = torch.stack(iret).detach()
-    ireward = torch.tensor(ireward).to(torch.float32)
-
     return ipos_t, iaction, iaction_probas_old, iadvantage, iret, ireward

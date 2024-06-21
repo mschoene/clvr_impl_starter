@@ -14,20 +14,19 @@ class episodeStep():
         action: np.array
         action_probas: np.array
         reward: float
-        next_state_obs: np.array 
         done: bool 
         value: float 
-        delta: float = 0.
         ret: float = 0.
         advantage: float =0.
 
 
 def collect_trajectory_step(actor, state, env, episode):
     action, action_proba, value = actor.act(state) 
-    next_state_obs, reward, done, _  = env.step(action) # dont need the info, put in _
-    next_pos_t = np_to_torch(next_state_obs)   
-    episode.append(episodeStep(state, action, action_proba, reward, next_state_obs, done, value ) )
-    return next_pos_t, done
+    next_state_obs, reward, done, _ = env.step(action) # dont need the info, put in _
+    #next_pos_t = np_to_torch(next_state_obs)   
+    #episode.append(episodeStep(state, action, action_proba, reward, next_state_obs, done, value ) )
+    episode.append(episodeStep(state, action, action_proba, reward, done, value ) )
+    return np_to_torch(next_state_obs)  , done
 
 def collect_trajectory(seed, actor, env_name, max_steps):
     episode = []
@@ -43,7 +42,6 @@ def collect_trajectory(seed, actor, env_name, max_steps):
                 break 
             state = pos_t # init state for next step 
     return episode
-
 
 
 def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, gamma, lambda_val, n_workers = 4):

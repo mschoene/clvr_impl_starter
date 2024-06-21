@@ -7,10 +7,12 @@ from models import Oracle, CNN, MimiPPOPolicy, ImageEncoder
 from rl_utils.traj_utils import *
 from rl_utils.ppo import MimiPPO
 import argparse
+import torch
 import wandb
 
 def load_pretrained_weights(model, pretrained_path):
-    model.load_state_dict(torch.load(pretrained_path))
+    device = torch.device('cpu')
+    model.load_state_dict(torch.load(pretrained_path, map_location=device))
     return model
 
 #Freeze params with True
@@ -51,30 +53,33 @@ def main(args):
         separate_ac_mlps = True
         ent_coef=0.0005 
 
+
     elif model_name =="enc": #pretrained encoder, frozen
-        pretrained_path = "models/encoder_model_20240620_195827_9"
+        pretrained_path = "models/encoder_model_2obj_20240620_153556_299"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        ent_coef=0.001 
+        ent_coef=0.0006 
         set_parameter_requires_grad(encoder, requires_grad=False)
     elif model_name =="enc_ft": #pretrained encoder, fine tuning
-        pretrained_path = "models/encoder_model_20240620_195827_9"
+        pretrained_path = "models/encoder_model_2obj_20240620_153556_299"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        ent_coef=0.001
+        ent_coef=0.0005
         set_parameter_requires_grad(encoder, requires_grad=True)
 
+
     elif model_name == "repr": # pretrained representation encoder
-        pretrained_path = "models/encoder_model_20240620_195827_9"
+        pretrained_path = "models/repr_encoder_model_20240620_130842_399"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
         ent_coef=0.001    
         set_parameter_requires_grad(encoder, requires_grad=False)
+
     elif model_name =="repr_ft": #pretrained representation encoder, fine tuning
-        pretrained_path = "models/encoder_model_20240620_195827_9"
+        pretrained_path = "models/repr_encoder_model_20240620_130842_399"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
