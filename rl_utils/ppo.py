@@ -92,7 +92,7 @@ class MimiPPO:
         self.epsilon = epsilon
 
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.writer = SummaryWriter('runs/RL_training_{}_{}'.format(self.model_name, self.timestamp))
+        self.writer = SummaryWriter('runs/RL_training_{}_{}_{}'.format(self.model_name,self.env_name ,self.timestamp))
         self.optimizer = optim.Adam( self.model.parameters(), lr = self.lr)
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 7500, min_lr = 2e-7 )
 
@@ -183,7 +183,7 @@ class MimiPPO:
 
         #if (counter > self.max_env_steps):
         print("DONE " , self.max_env_steps , " steps")
-        model_path = 'runs/RL_trained_model_{}_{}'.format(self.model_name, self.timestamp)
+        model_path = 'runs/RL_trained_model_{}_{}_{}'.format(self.model_name,self.env_name, self.timestamp)
         torch.save(self.model.state_dict(), model_path)
                      #scheduler.step(total_loss)
 
