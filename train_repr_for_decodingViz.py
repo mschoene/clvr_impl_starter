@@ -282,18 +282,19 @@ def do_epochs(EPOCHS=1000):
         writer.add_scalars('Training vs. Validation Loss',
                         { 'Training' : avg_loss, 'Validation' : avg_vloss },
                         epoch_number + 1)
-        writer.flush()
+        #writer.flush()
 
         # Track best performance, and save the model's state
-        if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1:
+        #if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1:
+        if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1 or epoch_number%100==0:
             best_vloss = avg_vloss
-            model_path = 'models/repr_decoder_horiz_model_{}_{}'.format(timestamp, epoch_number)
+            model_path = 'models/repr_decoder_horiz_model_epoch_{}_{}'.format(epoch_number, timestamp)
             torch.save(decoder.state_dict(), model_path)
-            model_path = 'models/repr_encoder_horiz_model_{}_{}'.format(timestamp, epoch_number)
+            model_path = 'models/repr_encoder_horiz_model_epoch_{}_{}'.format(epoch_number, timestamp)
             torch.save(encoder.state_dict(), model_path)
 
-        if  avg_vloss < 0.00001:
-            break
+        #if  avg_vloss < 0.00001:
+        #    break
 
         epoch_number += 1
 
