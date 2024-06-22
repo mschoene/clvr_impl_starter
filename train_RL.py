@@ -108,7 +108,8 @@ def main(args):
                           std_coef=args.std_coef, 
                           ent_coef=ent_coef, 
                           minibatch_size=minibatch_size,
-                          n_episodes=args.n_episodes                          
+                          n_episodes=args.n_episodes,
+                          max_env_steps = args.n_env_steps                     
                           )
 
     #ppo_trainer = MimiPPO( model, env)
@@ -130,6 +131,7 @@ if __name__ == "__main__":
     parser.add_argument('--minibatch_size', type=int, default=128, help="Minibatch size.")
     parser.add_argument('--n_distractors', type=int, choices=range(4), default=0, help="Number of distractors (0 to 3).")
     parser.add_argument('--n_episodes', type=int, choices=range(5000), default=500, help="Number of episodes, default 500.")
+    parser.add_argument('--n_env_steps', type=int,  default=5000000, help="Number of episodes, default 5M.")
 
     args = parser.parse_args()
     #wandb.config.update(args)
