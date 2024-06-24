@@ -2,7 +2,7 @@ from collections import namedtuple
 import torch
 import numpy as np
 from dataclasses import dataclass, asdict
-from rl_utils.buffer import ReplayBuffer
+#from rl_utils.buffer import ReplayBuffer
 from rl_utils.torch_utils import np_to_torch
 import concurrent.futures
 import gym

@@ -101,6 +101,8 @@ class MimiPPO:
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
         counter = 0. #this counts the number of environment steps in total
         next_threshold = 10000
+        reward_batched = 0
+        
         while(counter < self.max_env_steps):
         #for iteration in range(self.n_episodes):
             if counter >= next_threshold:
@@ -110,7 +112,7 @@ class MimiPPO:
                     if param.requires_grad and "action_std" in name:
                         print( name, param.data)  
 
-            #self.model = self.model.to('cpu') 
+            self.model = self.model.to('cpu') 
             ###  collecting trajectories and appending the episodes to the buffer ###
             collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
             ###
