@@ -44,7 +44,7 @@ class MimiPPO:
                 do_a2c = False, 
                 do_std_penalty = True,
 
-                n_trajectories = 16, # 8, #4, #16,# 8,
+                n_trajectories = 16, # 8, #4, 
                 n_actors = 4,
                 n_traj_steps = 49,
                 lr = 0.0003,
@@ -55,8 +55,8 @@ class MimiPPO:
                 max_env_steps = 5_000_000
             ): #this is not a sad smiley but a duck with a very wide mouth
 
-        #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.device = torch.device('cpu')
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        #self.device = torch.device('cpu')
         print("--- working on device ", self.device , " ---")
 
         self.model_name = model_name
@@ -121,15 +121,15 @@ class MimiPPO:
                     data = NpDataset( ( [ele for ele in self.replayBuffer] ))
                     total_loss = 0.
 
-                    #if self.device.type == 'cuda':
-                    #   self.model.to(self.device)
+                    if self.device.type == 'cuda':
+                       self.model.to(self.device)
+                       data.to(self.device)
 
                     #random_sampler = RandomSampler(data, num_samples = len(self.replayBuffer) ) 
                     #dataloader = DataLoader(data, batch_size = self.minibatch_size , collate_fn=my_collate_fn, sampler=random_sampler, num_workers=4 )
 
                     dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True) #, num_workers=4)
 
-                    #print(enumerate(dataloader))
                     looper = enumerate(dataloader)
                     for _, sample_batched in looper:
 
@@ -180,6 +180,9 @@ class MimiPPO:
                         self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
                         self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
                         #self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
+
+
+            print( 'Reward/train', reward_batched.mean().cpu().numpy())
 
         #if (counter > self.max_env_steps):
         print("DONE " , self.max_env_steps , " steps")

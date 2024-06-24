@@ -72,7 +72,7 @@ def main(args):
 
 
     elif model_name == "repr": # pretrained representation encoder
-        pretrained_path = "models/repr_encoder_model_20240620_130842_399"
+        pretrained_path = "models/repr_encoder_full_model_epoch_499_20240622_063255"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
@@ -80,7 +80,7 @@ def main(args):
         set_parameter_requires_grad(encoder, requires_grad=False)
 
     elif model_name =="repr_ft": #pretrained representation encoder, fine tuning
-        pretrained_path = "models/repr_encoder_model_20240620_130842_399"
+        pretrained_path = "models/repr_encoder_full_model_epoch_499_20240622_063255"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True

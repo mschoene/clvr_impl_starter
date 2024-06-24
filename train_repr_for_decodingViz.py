@@ -157,12 +157,8 @@ def main(args):
             elif train_type=="vert":
                 labels = sample_batched.rewards['vertical_position']
             else:
-                #print(sample_batched.rewards['target_x'])
-                #print(sample_batched.rewards['target_y'].shape)
                 labels = torch.stack((sample_batched.rewards['target_x'], sample_batched.rewards['target_y'], sample_batched.rewards['agent_x'], sample_batched.rewards['agent_y']))
-                #print(labels.shape)
                 labels = labels.permute(1,2,0) #last dimension is number of heads when predicting, ie we reoder to batch, sequence, head
-                #print(labels.shape)
 
             inputs_pre = torch.stack([torch.unsqueeze(trafo(img), dim=1) for img in inputs_pre], dim=1).transpose(1,0).squeeze(2)
             label_img = torch.stack([torch.unsqueeze(trafo(img), dim=1) for img in label_img], dim=1).transpose(1,0).squeeze(2)
@@ -189,7 +185,6 @@ def main(args):
             # Adjust learning weights
             optimizer_repr.step()
 
-
             loss_dec = 0.
 
             #predictions.detach()
@@ -214,13 +209,10 @@ def main(args):
             if i_batch % n_batches == (n_batches -1):
                 print('Last loss of lstm {} and decoder {}'.format( loss.item(), loss_dec.item() ))
                 last_loss = running_loss / float(n_batches) # loss per batch
-                #print('  batch {} loss: {}'.format(i_batch + 1, last_loss))
-                #print(' l1 loss ', l1_lambda * l1_loss )
                 tb_x = epoch_index * len(dataloader) + i_batch + 1
                 tb_writer.add_scalar('Loss/train', last_loss, tb_x)
                 running_loss = 0.
 
-        #epoch_loss = running_loss/counter
         return last_loss
 
     def do_epochs(EPOCHS=1000):
@@ -246,21 +238,18 @@ def main(args):
             with torch.no_grad():
                 for i, vdata in enumerate(dataloader_valid): #validation_loader):
                     counter += 1
-                    #vinputs, vlabels = vdata.images[:, 0, ...].squeeze(1), vdata.images[:, 0, ...].squeeze(1)
+                    # vinputs, vlabels = vdata.images[:, 0, ...].squeeze(1), vdata.images[:, 0, ...].squeeze(1)
 
-                    vinputs = vdata.images#[:, :n_conditioning_frames, ...] #take only first n images as inputs (tech not nec since model anyway only uses 3) #TODO make more general
-                    vlabel_img = vdata.images#[:, :n_conditioning_frames, ...]
-                    #vlabels = vdata.rewards['target_x']
-                    #vlabels = vdata.rewards['vertical_position']
-                    #vlabels = vdata.rewards['horizontal_position']
+                    vinputs = vdata.images #[:, :n_conditioning_frames, ...] #take only first n images as inputs (tech not nec since model anyway only uses 3) #TODO make more general
+                    vlabel_img = vdata.images #[:, :n_conditioning_frames, ...]
+
                     if train_type =="horiz":
                         vlabels = vdata.rewards['horizontal_position']
                     elif train_type=="vert":
                         vlabels = vdata.rewards['vertical_position']
                     else:
                         vlabels = torch.stack((vdata.rewards['target_x'], vdata.rewards['target_y'], vdata.rewards['agent_x'], vdata.rewards['agent_y']))
-                        vlabels = vlabels.permute(1,2,0) #last dimension is number of heads when predicting, ie we reoder to batch, sequence, head
-
+                        vlabels = vlabels.permute(1,2,0) # last dimension is number of heads when predicting, ie we reoder to batch, sequence, head
 
                     vinputs = vinputs.to(device)
                     vlabels = vlabels.to(device)

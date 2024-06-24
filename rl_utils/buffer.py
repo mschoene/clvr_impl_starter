@@ -24,7 +24,9 @@ class NpDataset(Dataset):
         self.array = array
     def __len__(self): return len(self.array) 
     def __getitem__(self, i): return self.array[i]
-
+    def to(self, device):
+        self.array = [ele.to(device) for ele in self.array]
+        return self
 
 def my_collate_fn(data):
     return tuple(data)
