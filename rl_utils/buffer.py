@@ -1,6 +1,7 @@
 import torch
 from  collections import deque
 from torch.utils.data import Dataset
+from rl_utils.traj_utils import EpisodeStep
 
 #class trajBuffer(deque):
 #    def __init__(self, maxlen =10):
@@ -24,8 +25,13 @@ class NpDataset(Dataset):
         self.array = array
     def __len__(self): return len(self.array) 
     def __getitem__(self, i): return self.array[i]
+    #def to(self, device):
+    #    self.array = [ele.to(device) for ele in self.array]
+    #    return self
+    
     def to(self, device):
-        self.array = [ele.to(device) for ele in self.array]
+        # Move each element of the namedtuple to the device
+        self.array = [EpisodeStep(*[ele.to(device) if torch.is_tensor(ele) else ele for ele in step]) for step in self.array]
         return self
 
 def my_collate_fn(data):

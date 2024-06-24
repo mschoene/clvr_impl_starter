@@ -101,8 +101,8 @@ class MimiPPO:
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
         counter = 0. #this counts the number of environment steps in total
         next_threshold = 10000
-        reward_batched = 0
-        
+        #reward_batched = 0
+
         while(counter < self.max_env_steps):
         #for iteration in range(self.n_episodes):
             if counter >= next_threshold:
@@ -184,7 +184,7 @@ class MimiPPO:
                         #self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
 
 
-            print( 'Reward/train', reward_batched.mean().cpu().numpy())
+            #print( 'Reward/train', reward_batched.mean().cpu().numpy())
 
         #if (counter > self.max_env_steps):
         print("DONE " , self.max_env_steps , " steps")
