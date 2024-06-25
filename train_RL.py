@@ -84,7 +84,7 @@ def main(args):
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        ent_coef=0.0005 
+        ent_coef=0.0001 
         set_parameter_requires_grad(encoder, requires_grad=True)
 
     else:

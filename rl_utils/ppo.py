@@ -127,24 +127,14 @@ class MimiPPO:
                        self.model.to(self.device)
                        data.to(self.device)
 
-                    #random_sampler = RandomSampler(data, num_samples = len(self.replayBuffer) ) 
-                    #dataloader = DataLoader(data, batch_size = self.minibatch_size , collate_fn=my_collate_fn, sampler=random_sampler, num_workers=4 )
-
                     dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True) #, num_workers=4)
+                    
+                    self.model.train()
 
-                    looper = enumerate(dataloader)
-                    for _, sample_batched in looper:
+                    for _, sample_batched in enumerate(dataloader):
 
-                        self.model.train()
                         pos_t_batched, actions_batched, action_probas_old_batched, advantage_batched, return_batched, reward_batched = extract_values_from_batch(sample_batched, self.minibatch_size)
                         
-                        #pos_t_batched = pos_t_batched.to(self.device)
-                        #actions_batched = actions_batched.to(self.device)
-                        #action_probas_old_batched = action_probas_old_batched.to(self.device)
-                        #advantage_batched = advantage_batched.to(self.device)
-                        #return_batched = return_batched.to(self.device)
-                        #reward_batched = reward_batched.to(self.device)
-
                         if(self.do_adv_norm):
                             advantage_batched = get_averaged_tensor(advantage_batched)
                             return_batched = get_averaged_tensor(return_batched)
@@ -181,6 +171,7 @@ class MimiPPO:
                         self.writer.add_scalar('Loss/Value', value_loss.detach().cpu().numpy(), counter)
                         self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
                         self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
+                        print(reward_batched.mean().cpu().numpy())
                         #self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
 
 

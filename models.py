@@ -230,34 +230,9 @@ class Predictor(nn.Module):
         return outputs
     
 
-
-#    def forward(self, x):
-#        conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
-#        merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) #TODO fix for batch to dim 1?
-#        #TODO Fix this to take the frames sequentially in
-#
-#        mlp_output = self.mlp_enc(merged_embedding) #TODO check if needs to be split in 3?
-#        mlp_output = mlp_output.unsqueeze(1) #TODO check 
-#
-#        h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial hidden state
-#        c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial cell state
-#
-#        #TODO fix range to end of traj/max len of traj
-#        #output_sequence = []
-#        outputs_list = []
-#        input_t = mlp_output
-#
-#        for i_step in range(self.n_pred_frames):
-#            lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
-#            outputs_list.append(h0[-1].unsqueeze(1))
-#            #without teacher forcign #TODO check if teacher forcing is nec.
-#            input_t = lstm_outstep
-#
-#        # Concatenate predicted outputs along the sequence dimension = [nb, >ns<]
-#        outputs = torch.stack(outputs_list, dim=1).squeeze(2)
-#        return outputs
-
-
+###############################################################
+### MLP heads for reward prediction  ###
+###############################################################
 class RewardPredictor(nn.Module):
     def __init__(self, n_pred_frames=25, n_heads=4, lstm_output_size=64 ):
         super(RewardPredictor, self).__init__()
@@ -279,10 +254,6 @@ class RewardPredictor(nn.Module):
         outputs = torch.stack(outputs_list, dim=1).squeeze()  # Shape: (batch_size, n_frames, n_heads, ...)
 
         return outputs
-    
-
-
-
 
 
 ###############################################################
