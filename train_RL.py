@@ -29,7 +29,7 @@ def set_parameter_requires_grad(model, requires_grad=False):
 
 def main(args):
 
-    actions_space_std = 0.5
+    actions_space_std = -1. # 0.5
     ent_coef = args.ent_coef
     minibatch_size = args.minibatch_size
 

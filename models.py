@@ -345,7 +345,15 @@ class MimiPPOPolicy(nn.Module):
         x = self.encoder(x)
         value = self.critic_layers(x)
         actor_output = self.actor_layers(x)
-        action_cov = torch.diag(self.action_std)
+
+        below_threshold = torch.exp(self.action_std) * (self.action_std <= 0)
+        # Avoid NaN: zeros values that are below zero
+        safe_log_std = self.action_std * (self.action_std > 0) + 1e-6
+        above_threshold = ( torch.log1p(safe_log_std) + 1.0) * (self.action_std > 0)
+        std = below_threshold + above_threshold
+        
+        action_cov = torch.diag(std)
+        #action_cov = torch.diag(self.action_std)
         dist = MultivariateNormal(actor_output, action_cov)
         return dist, value
     

@@ -155,7 +155,7 @@ class MimiPPO:
                         entropy_loss = - entropy_prop.mean()
 
                         #to keep it from exploding and just going random/max action rather than trying to predict the correct mean
-                        log_std_penalty_loss = self.std_coef * (self.model.action_std).mean()
+                        log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() *(1.+ 0.2 * counter / self.max_env_steps )
 
                         # total loss 
                         total_loss = self.vf_coef * value_loss + action_loss + self.ent_coef * entropy_loss + log_std_penalty_loss
