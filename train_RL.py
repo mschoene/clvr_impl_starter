@@ -29,7 +29,7 @@ def set_parameter_requires_grad(model, requires_grad=False):
 
 def main(args):
 
-    actions_space_std = 0 #-1. # 0.5
+    actions_space_std =  args.action_std_init #0. #-1. #0 #-1. # 0.5
     ent_coef = args.ent_coef
     minibatch_size = args.minibatch_size
 
@@ -134,6 +134,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_episodes', type=int, choices=range(5000), default=500, help="Number of episodes, default 500.")
     parser.add_argument('--n_env_steps', type=int,  default=5000000, help="Number of episodes, default 5M.")
     parser.add_argument('--sep_ac', type=bool,  default=True, help="Bool separate policy&value networks")
+    parser.add_argument('--action_std_init', type=float, default=0.0, help="Initial log action standard deviation.")
 
     args = parser.parse_args()
     #wandb.config.update(args)

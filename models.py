@@ -195,34 +195,27 @@ class Predictor(nn.Module):
 
     def forward(self, x):
         conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
-        #merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) #TODO fix for batch to dim 1?
-        #TODO Fix this to take the frames sequentially in
-
-
+        #merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) 
 
         h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial hidden state
         c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial cell state
 
-        #TODO fix range to end of traj/max len of traj
-        #output_sequence = []
         outputs_list = []
 
         #condition with n conditioning frames
         for i_step in range( self.n_cond_frames):
-            mlp_output = self.mlp_enc(conv_embeddings[i_step]) #TODO check if needs to be split in 3?
-            mlp_output = mlp_output.unsqueeze(1) #TODO check 
+            mlp_output = self.mlp_enc(conv_embeddings[i_step]) 
+            mlp_output = mlp_output.unsqueeze(1) 
             input_t = mlp_output
 
             lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
             #outputs_list.append(h0[-1].unsqueeze(1))
-            #without teacher forcign #TODO check if teacher forcing is nec.
             #input_t = lstm_outstep
 
         #then just roll
         for i_step in range(self.n_pred_frames):
             lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
             outputs_list.append(h0[-1].unsqueeze(1))
-            #without teacher forcign #TODO check if teacher forcing is nec.
             input_t = lstm_outstep
 
         # Concatenate predicted outputs along the sequence dimension = [nb, >ns<]
@@ -259,20 +252,20 @@ class RewardPredictor(nn.Module):
 ###############################################################
 ### Image-scratch model: use encoder with MLPs for AC ###
 ###############################################################
-class ImgScratch(nn.Module):
-    def __init__(self, encoder, obs_dim, action_space, action_std_init):
-        super(ImgScratch).__init__()
-        self.encoder = encoder
-        self.input_size = obs_dim
-        self.action_dim = action_space
-
-        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
-
-        self.actor = nn.Sequential(MLP(64, self.action_dim, 32, 2, True),  nn.Tanh())
-        self.value = nn.Sequential(MLP(64, 1, 32, 2, True))
-
-    def forward(self, x):
-        return self.encoder(x)
+#class ImgScratch(nn.Module):
+#    def __init__(self, encoder, obs_dim, action_space, action_std_init):
+#        super(ImgScratch).__init__()
+#        self.encoder = encoder
+#        self.input_size = obs_dim
+#        self.action_dim = action_space
+#
+#        #self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
+#
+#        #self.actor = nn.Sequential(MLP(64, self.action_dim, 32, 2, True),  nn.Tanh())
+#        #self.value = nn.Sequential(MLP(64, 1, 32, 2, True))
+#
+#    def forward(self, x):
+#        return self.encoder(x)
 
 
 ##############################################

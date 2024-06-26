@@ -116,7 +116,8 @@ class MimiPPO:
             ###  collecting trajectories and appending the episodes to the buffer ###
             collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
             ###
-            counter += (self.n_trajectories * self.n_actors * (self.n_traj_steps+1))
+            #counter += (self.n_trajectories * self.n_actors * (self.n_traj_steps+1))
+            counter += ( len(self.replayBuffer))
 
             if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
                 for i_epoch in range(self.n_epochs):   
@@ -155,7 +156,7 @@ class MimiPPO:
                         entropy_loss = - entropy_prop.mean()
 
                         #to keep it from exploding and just going random/max action rather than trying to predict the correct mean
-                        log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() *(1.+ 0.5 * counter / self.max_env_steps )
+                        log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() * ( counter / self.max_env_steps )
 
                         # total loss 
                         total_loss = self.vf_coef * value_loss + action_loss + self.ent_coef * entropy_loss + log_std_penalty_loss

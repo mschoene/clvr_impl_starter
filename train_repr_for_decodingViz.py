@@ -81,7 +81,7 @@ def main(args):
     n_conditioning_frames = 3
     n_prediction_frames = 25 
     batch_size = 128 #64
-    n_batches = 1 #TODO undo this00
+    n_batches = 100
     n_samples = batch_size*n_batches
 
     input_channels = 1 # 3 but we change it to grey scale first
@@ -285,14 +285,15 @@ def main(args):
 
                     running_vloss += vloss + vloss_dec
 
-                #every eval decode one sequence for display          
-                pred_1seq = vpredictions[0, ...] #get 1 item in batch of predicitons (ie output of pred is shorter by conditioning frames)
-                vin_img_truth_1seq= vlabel_img[0, n_conditioning_frames:n_prediction_frames+n_conditioning_frames, ...] #.squeeze(1)
+                if (epoch_number%100==0 and epoch_number >0):
+                    #every eval decode one sequence for display          
+                    pred_1seq = vpredictions[0, ...] #get 1 item in batch of predicitons (ie output of pred is shorter by conditioning frames)
+                    vin_img_truth_1seq= vlabel_img[0, n_conditioning_frames:n_prediction_frames+n_conditioning_frames, ...] #.squeeze(1)
 
-                vdec_img = decoder(pred_1seq)
-                display = list(vdec_img) + list(vin_img_truth_1seq)
-                display = torchvision.utils.make_grid(display,nrow=25)
-                torchvision.utils.save_image(display, "models/ae_reward_comp_{}_{}_{}.png".format(train_type, epoch_number, timestamp) )
+                    vdec_img = decoder(pred_1seq)
+                    display = list(vdec_img) + list(vin_img_truth_1seq)
+                    display = torchvision.utils.make_grid(display,nrow=25)
+                    torchvision.utils.save_image(display, "models/ae_reward_comp_{}_{}_{}.png".format(train_type, epoch_number, timestamp) )
 
     
             avg_vloss = running_vloss /counter # (i + 1.)
