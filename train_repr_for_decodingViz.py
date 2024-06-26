@@ -131,7 +131,7 @@ def main(args):
     #print( summary(reward_predictor, (input_channels, output_size, batch_size)) )
     # Initializing in a separate cell so we can easily add more epochs to the same run
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    writer = SummaryWriter('runs/encoder_repr_trainer_{}'.format(timestamp))
+    writer = SummaryWriter('runs/encoder_repr_trainer_{}_{}'.format(train_type, timestamp))
     epoch_number = 0
 
     trafo = v2.Compose([v2.Grayscale(num_output_channels=1) ])
@@ -290,7 +290,7 @@ def main(args):
                 vdec_img = decoder(vin_img)
                 display = list(vdec_img[0:n_prediction_frames]) + list(vin_img_truth[0:n_prediction_frames])
                 display = torchvision.utils.make_grid(display,nrow=25)
-                torchvision.utils.save_image(display, "models/ae_reward_comp.png_{}_{}_{}".format(train_type, epoch_number, timestamp) )
+                torchvision.utils.save_image(display, "models/ae_reward_comp_{}_{}_{}.png".format(train_type, epoch_number, timestamp) )
 
     
             avg_vloss = running_vloss /counter # (i + 1.)
@@ -301,7 +301,7 @@ def main(args):
             writer.add_scalars('Training vs. Validation Loss',
                             { 'Training' : avg_loss, 'Validation' : avg_vloss },
                             epoch_number + 1)
-            #writer.flush()
+            writer.flush()
 
             # Track best performance, and save the model's state
             #if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1:
@@ -318,7 +318,7 @@ def main(args):
             #    break
 
             epoch_number += 1
-
+        writer.close()
 
     do_epochs(train_epochs)
 

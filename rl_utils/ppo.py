@@ -44,9 +44,9 @@ class MimiPPO:
                 do_a2c = False, 
                 do_std_penalty = True,
 
-                n_trajectories = 16, # 8, #4, 
-                n_actors = 4,
-                n_traj_steps = 49,
+                n_trajectories = 16, #16, # 8, #4, 
+                n_actors = 8,
+                n_traj_steps = 40, #49,
                 lr = 0.0003,
                 epsilon = 0.2,
                 n_episodes = 500,
@@ -155,7 +155,7 @@ class MimiPPO:
                         entropy_loss = - entropy_prop.mean()
 
                         #to keep it from exploding and just going random/max action rather than trying to predict the correct mean
-                        log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() *(1.+ 0.2 * counter / self.max_env_steps )
+                        log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() *(1.+ 0.5 * counter / self.max_env_steps )
 
                         # total loss 
                         total_loss = self.vf_coef * value_loss + action_loss + self.ent_coef * entropy_loss + log_std_penalty_loss

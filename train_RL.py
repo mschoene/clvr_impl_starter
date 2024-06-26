@@ -29,30 +29,31 @@ def set_parameter_requires_grad(model, requires_grad=False):
 
 def main(args):
 
-    actions_space_std = -1. # 0.5
+    actions_space_std = 0 #-1. # 0.5
     ent_coef = args.ent_coef
     minibatch_size = args.minibatch_size
 
     model_name = args.model_name.lower()
     policy_input_dim = 64
     env_name = f'Sprites-v{args.n_distractors}'
-    separate_ac_mlps = False
+    separate_ac_mlps = args.sep_ac #  False
 
     if model_name == 'oracle':
         ent_coef = 0.05
         minibatch_size = 64
+        separate_ac_mlps = False
         env_name = f'SpritesState-v{args.n_distractors}'
         env = gym.make(env_name)
         encoder = Oracle(env.observation_space.shape[0])
         policy_input_dim =32
     elif model_name == 'cnn':
-        ent_coef=0.0005
-        encoder = CNN()
+        #ent_coef = 0.0004 #0.0005
+        encoder = CNN()  # --ent_coef 0.0004 --std_coef 0.2 --minibatch_size 128
         #policy = MimiPPOPolicy(encoder=cnn_encoder, obs_dim=obs_dim, action_space=action_space, action_std_init=action_std_init, encoder_output_size=encoder_output_size)
     elif model_name == 'img':
         encoder = ImageEncoder(1, 64)
         separate_ac_mlps = True
-        ent_coef=0.0005 
+        ent_coef=0.0005  
 
 
     elif model_name =="enc": #pretrained encoder, frozen
@@ -83,7 +84,7 @@ def main(args):
         pretrained_path = "models/repr_encoder_full_model_epoch_499_20240622_063255"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
-        separate_ac_mlps = True
+        #separate_ac_mlps = False #True
         #ent_coef=0.0001 
         set_parameter_requires_grad(encoder, requires_grad=True)
 
@@ -132,6 +133,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_distractors', type=int, choices=range(4), default=0, help="Number of distractors (0 to 3).")
     parser.add_argument('--n_episodes', type=int, choices=range(5000), default=500, help="Number of episodes, default 500.")
     parser.add_argument('--n_env_steps', type=int,  default=5000000, help="Number of episodes, default 5M.")
+    parser.add_argument('--sep_ac', type=bool,  default=True, help="Bool separate policy&value networks")
 
     args = parser.parse_args()
     #wandb.config.update(args)

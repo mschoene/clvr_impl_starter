@@ -10,26 +10,12 @@ import gym
 import multiprocessing as mp
 
 
-@dataclass
-class episodeStep():
-        state: np.array
-        action: np.array
-        action_probas: np.array
-        reward: float
-        done: bool 
-        value: float 
-        ret: float = 0.
-        advantage: float =0.
-
 EpisodeStep = namedtuple('EpisodeStep', ['state', 'action', 'action_probas', 'reward', 'done', 'value', 'ret', 'advantage'])
 
 
 def collect_trajectory_step(actor, state, env, episode):
     action, action_proba, value = actor.act(state) 
     next_state_obs, reward, done, _ = env.step(action) # dont need the info, put in _
-    #next_pos_t = np_to_torch(next_state_obs)   
-    #episode.append(episodeStep(state, action, action_proba, reward, next_state_obs, done, value ) )
-    #episode.append(episodeStep(state, action, action_proba, reward, done, value ) )
     episode.append(EpisodeStep(state, action, action_proba, reward, done, value, 0., 0.))
 
     return np_to_torch(next_state_obs), done
@@ -43,6 +29,7 @@ def collect_trajectory(seed, actor, env_name, max_steps):
     with torch.no_grad():
         actor.eval()
         for st in range(max_steps):
+            #print(seed, st )
             pos_t, done = collect_trajectory_step(actor, state, env, episode)
             if done:
                 break 
@@ -107,10 +94,6 @@ def calc_discd_vals(episode, gamma, lambda_val):
             # For the last timestep
             advantages[t] = reward - value
             returns[t] = reward + value
-
-    #for i, e_t in enumerate(episode):
-    #    e_t.advantage = advantages[i]
-    #    e_t.ret = returns[i]
 
     updated_episode = []
     for i in range(len(episode)):

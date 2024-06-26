@@ -329,20 +329,26 @@ class MimiPPOPolicy(nn.Module):
         self.encoder_output_size = encoder_output_size
         self.input_size = obs_dim
         self.action_dim = action_space
-
+        self.separate_layers = separate_layers
         self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
 
-        self.critic_layers = nn.Sequential( nn.Linear(self.encoder_output_size , 1) )
-        self.actor_layers = nn.Sequential( nn.Linear(self.encoder_output_size, self.action_dim), nn.Tanh())
+        self.shared_layers = MLP(self.encoder_output_size , 32, 32, 2, True)
+        self.critic_layers = nn.Sequential( nn.Linear(32 , 1) )
+        self.actor_layers = nn.Sequential( nn.Linear(32, self.action_dim), nn.Tanh())
+        #self.critic_layers = nn.Sequential( nn.Linear(self.encoder_output_size , 1) )
+        #self.actor_layers = nn.Sequential( nn.Linear(self.encoder_output_size, self.action_dim), nn.Tanh())
         if separate_layers:
             self.actor_layers = nn.Sequential(MLP(self.encoder_output_size , self.action_dim, 32, 2),  nn.Tanh())
             self.critic_layers = nn.Sequential(MLP(self.encoder_output_size , 1, 32, 2))
 
+        self.shared_layers.apply(init_weights)
         self.actor_layers.apply(init_weights)
         self.critic_layers.apply(init_weights)
 
     def forward(self, x):
         x = self.encoder(x)
+        if not self.separate_layers:
+            x = self.shared_layers(x)
         value = self.critic_layers(x)
         actor_output = self.actor_layers(x)
 
