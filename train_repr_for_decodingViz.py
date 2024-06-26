@@ -79,9 +79,9 @@ def main(args):
     #cv2.imwrite("test.png", img[0].transpose(1, 2, 0))
 
     n_conditioning_frames = 3
-    n_prediction_frames = 25 #TODO change to 25 or w/e
+    n_prediction_frames = 25 
     batch_size = 128 #64
-    n_batches = 100
+    n_batches = 1 #TODO undo this00
     n_samples = batch_size*n_batches
 
     input_channels = 1 # 3 but we change it to grey scale first
@@ -188,16 +188,23 @@ def main(args):
             loss_dec = 0.
 
             #predictions.detach()
-            #nb, nf, ndim = predictions.shape()
+            #nb, nf, ndim = predictions.shape
             #in_img = predictions.view(nb*nf, ndim)
+            #print(predictions.shape, in_img.shape)
+
             in_img = inputs[:, 0, ...] #.squeeze(1)
-            in_img_truth = label_img[:, 0, ...] #.squeeze(1)
+            in_img_truth = label_img[:, 0, ...] #.squeeze(1) #n_conditioning_frames:n_conditioning_frames + n_prediction_frames
+            #in_img_truth = label_img[:, n_conditioning_frames:n_conditioning_frames + n_prediction_frames, ...] #.squeeze(1) #
 
             enc_img = encoder(in_img)
-            in_img.detach()
+            #in_img.detach()
             enc_img.detach()
             in_img_truth.detach()
+            #print(predictions.shape, enc_img.shape)
             dec_img = decoder(enc_img)
+            #print(in_img_truth.shape, in_img.shape)
+
+            #dec_img = decoder(in_img)
             loss_i = loss_fn_decoder(dec_img, in_img_truth)
             loss_dec += loss_i
             loss_dec.backward()
@@ -278,17 +285,12 @@ def main(args):
 
                     running_vloss += vloss + vloss_dec
 
-                #every 
-                nb, nf, ndim = vpredictions.shape
-                vin_img = vpredictions.view(nb*nf, ndim)            
-                #print(vin_img.shape)
-                vin_img_truth = vlabel_img[:, n_conditioning_frames:n_prediction_frames+n_conditioning_frames, ...] #.squeeze(1)
-                nb, nf_t, nc, nw, nh = vin_img_truth.shape
-                assert(nf == nf_t)
-                vin_img_truth = vin_img_truth.reshape(nb*nf_t, nc, nw, nh) #.squeeze(1)
-                #venc_img = encoder(vin_img)
-                vdec_img = decoder(vin_img)
-                display = list(vdec_img[0:n_prediction_frames]) + list(vin_img_truth[0:n_prediction_frames])
+                #every eval decode one sequence for display          
+                pred_1seq = vpredictions[0, ...] #get 1 item in batch of predicitons (ie output of pred is shorter by conditioning frames)
+                vin_img_truth_1seq= vlabel_img[0, n_conditioning_frames:n_prediction_frames+n_conditioning_frames, ...] #.squeeze(1)
+
+                vdec_img = decoder(pred_1seq)
+                display = list(vdec_img) + list(vin_img_truth_1seq)
                 display = torchvision.utils.make_grid(display,nrow=25)
                 torchvision.utils.save_image(display, "models/ae_reward_comp_{}_{}_{}.png".format(train_type, epoch_number, timestamp) )
 
