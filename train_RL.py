@@ -11,6 +11,38 @@ import torch
 import wandb
 import time
 
+def make_histos(ppo_trainer):
+    # actions taken
+    x_values = []
+    y_values = []
+
+    #print(repBuf[0][1][0])
+    for item in range(len(ppo_trainer.replayBuffer)):
+        x, y = ppo_trainer.replayBuffer[item][1][0].tolist()
+        x_values.append(x)
+        y_values.append(y)
+    x_values = np.array(x_values)
+    y_values = np.array(y_values)
+
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(10, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.hist(x_values, bins=100, color='blue', alpha=0.7)
+    plt.title('Histogram of X actions values')
+    plt.xlabel('X')
+    plt.ylabel('Frequency')
+
+    plt.subplot(1, 2, 2)
+    plt.hist(y_values, bins=100, color='green', alpha=0.7)
+    plt.title('Histogram of Y actions values')
+    plt.xlabel('Y')
+    plt.ylabel('Frequency')
+    plt.tight_layout()
+
+    plt.savefig('histograms_actions.png')
+
+
 def load_pretrained_weights(model, pretrained_path):
     device = torch.device('cpu')
     model.load_state_dict(torch.load(pretrained_path, map_location=device))
@@ -39,7 +71,7 @@ def main(args):
     separate_ac_mlps = args.sep_ac #  False
 
     if model_name == 'oracle':
-        ent_coef = 0.05
+        #ent_coef = 0.05
         minibatch_size = 64
         separate_ac_mlps = False
         env_name = f'SpritesState-v{args.n_distractors}'
@@ -122,7 +154,7 @@ def main(args):
     print("===========   done training   ===========")
     end = time.time()
     print("finished training in ", end- start , " seconds")
-
+    make_histos(ppo_trainer)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train MimiPPO model with specified parameters.")
@@ -164,37 +196,8 @@ if __name__ == "__main__":
 #    obs, reward, done, info = env.step([0, 0])
 #    cv2.imwrite("test_rl_1.png", 255 * np.expand_dims(obs, -1))
 
-def make_histos(ppo_trainer):
-    # actions taken
-    x_values = []
-    y_values = []
 
-    #print(repBuf[0][1][0])
-    for item in range(len(ppo_trainer.replayBuffer)):
-        x, y = ppo_trainer.replayBuffer[item][1][0].tolist()
-        x_values.append(x)
-        y_values.append(y)
-    x_values = np.array(x_values)
-    y_values = np.array(y_values)
-
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(10, 5))
-
-    plt.subplot(1, 2, 1)
-    plt.hist(x_values, bins=100, color='blue', alpha=0.7)
-    plt.title('Histogram of X actions values')
-    plt.xlabel('X')
-    plt.ylabel('Frequency')
-
-    plt.subplot(1, 2, 2)
-    plt.hist(y_values, bins=100, color='green', alpha=0.7)
-    plt.title('Histogram of Y actions values')
-    plt.xlabel('Y')
-    plt.ylabel('Frequency')
-    plt.tight_layout()
-
-    plt.savefig('histograms_actions.png')
-
+def make_histos_position(ppo_trainer):
     x_values = []
     y_values = []
 
