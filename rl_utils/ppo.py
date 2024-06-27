@@ -158,13 +158,13 @@ class MimiPPO:
                             action_loss = -torch.min(act1, act2).mean() 
 
                         value_loss = F.mse_loss(value_prop.squeeze(), return_batched.squeeze())
-                        entropy_loss = - entropy_prop.mean()
+                        #entropy_loss = - entropy_prop.mean()
 
                         #to keep it from exploding and just going random/max action rather than trying to predict the correct mean
-                        log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() * ( counter / self.max_env_steps )
+                        #log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() * ( counter / self.max_env_steps )
 
                         # total loss 
-                        total_loss = self.vf_coef * value_loss + action_loss + self.ent_coef * entropy_loss + log_std_penalty_loss
+                        total_loss = self.vf_coef * value_loss + action_loss  #+ self.ent_coef * entropy_loss + log_std_penalty_loss
 
                         self.optimizer.zero_grad()
                         total_loss.mean().backward()
@@ -175,7 +175,7 @@ class MimiPPO:
                         self.writer.add_scalar('Loss/train', total_loss.item(), counter)
                         self.writer.add_scalar('Loss/Policy_grad', action_loss.detach().cpu().numpy(), counter)
                         self.writer.add_scalar('Loss/Value', value_loss.detach().cpu().numpy(), counter)
-                        self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
+                        #self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
                         self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
                         self.writer.add_scalar('Param/action_std', self.model.action_std.data[0].cpu(), counter)
                         print(reward_batched.mean().cpu().numpy())
