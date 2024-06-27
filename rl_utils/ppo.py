@@ -100,7 +100,6 @@ class MimiPPO:
         self.final_log_std = -10.0
         self.annealing_rate = (self.model.action_std[0] - self.final_log_std) / 5000000.
 
-
     def train(self):
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
@@ -123,6 +122,9 @@ class MimiPPO:
             ###
             #counter += (self.n_trajectories * self.n_actors * (self.n_traj_steps+1))
             counter += ( len(self.replayBuffer))
+
+            new_log_std = self.model.action_std.to('cpu') - self.annealing_rate.to("cpu")
+            self.model.action_std.data = torch.tensor(new_log_std)#.to(self.device)
 
             if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
                 for i_epoch in range(self.n_epochs):   
@@ -181,8 +183,7 @@ class MimiPPO:
                         print(reward_batched.mean().cpu().numpy())
                         #self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
 
-            new_log_std = self.model.action_std - self.annealing_rate
-            self.model.action_std.data = torch.tensor(new_log_std).to(self.model.action_std.device)
+
             #print(self.model.action_std.data)
 
             #print( 'Reward/train', reward_batched.mean().cpu().numpy())
