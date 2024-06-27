@@ -52,7 +52,7 @@ def main(args):
 
     spec = AttrDict(
             resolution=64,
-            max_seq_len=30, #30,
+            max_seq_len=40, #30, #30,
             max_speed=0.05,      # total image range [0, 1]
             obj_size=0.2,       # size of objects, full images is 1.0
             shapes_per_traj=1,      # number of shapes per trajectory
@@ -62,7 +62,7 @@ def main(args):
     if(train_type =="full"):
         spec = AttrDict(
                 resolution=64,
-                max_seq_len=30, #30,
+                max_seq_len=40, #30, #30,
                 max_speed=0.05,      # total image range [0, 1]
                 obj_size=0.2,       # size of objects, full images is 1.0
                 shapes_per_traj=2,      # number of shapes per trajectory
@@ -78,7 +78,7 @@ def main(args):
     #img = make_image_seq_strip([traj.images[None, :, None].repeat(3, axis=2).astype(np.float32)], sep_val=255.0).astype(np.uint8)
     #cv2.imwrite("test.png", img[0].transpose(1, 2, 0))
 
-    n_conditioning_frames = 3
+    n_conditioning_frames = 10 #3
     n_prediction_frames = 25 
     batch_size = 128 #64
     n_batches = 100
@@ -285,7 +285,7 @@ def main(args):
 
                     running_vloss += vloss + vloss_dec
 
-                if (epoch_number%100==0 and epoch_number >0):
+                if (epoch_number%100==0 and epoch_number >0) or epoch_number==EPOCHS-1:
                     #every eval decode one sequence for display          
                     pred_1seq = vpredictions[0, ...] #get 1 item in batch of predicitons (ie output of pred is shorter by conditioning frames)
                     vin_img_truth_1seq= vlabel_img[0, n_conditioning_frames:n_prediction_frames+n_conditioning_frames, ...] #.squeeze(1)
@@ -338,6 +338,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train MimiPPO model with specified parameters.")
     parser.add_argument('--type', type=str, required=True, help="Which rewards to consider ('horiz', 'vert', 'full').")
     parser.add_argument('--n_epochs', type=int, default=500, help="Number of training epochs to run, default 500.")
+    parser.add_argument('--n_distractors', type=int, default=0, help="Number of distractors, default 0.")
 
     args = parser.parse_args()
 

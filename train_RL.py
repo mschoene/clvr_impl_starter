@@ -77,7 +77,7 @@ def main(args):
         env_name = f'SpritesState-v{args.n_distractors}'
         env = gym.make(env_name)
         encoder = Oracle(env.observation_space.shape[0])
-        policy_input_dim =32
+        policy_input_dim = 32
     elif model_name == 'cnn':
         #ent_coef = 0.0004 #0.0005
         encoder = CNN()  # --ent_coef 0.0004 --std_coef 0.2 --minibatch_size 128
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.0015, help="Entropy coefficient.")
     parser.add_argument('--minibatch_size', type=int, default=128, help="Minibatch size.")
     parser.add_argument('--n_distractors', type=int, choices=range(4), default=0, help="Number of distractors (0 to 3).")
-    parser.add_argument('--n_episodes', type=int, choices=range(5000), default=500, help="Number of episodes, default 500.")
+    parser.add_argument('--n_episodes', type=int, default=500, help="Number of episodes, default 500.")
     parser.add_argument('--n_env_steps', type=int,  default=5000000, help="Number of episodes, default 5M.")
     parser.add_argument('--sep_ac', type=bool,  default=True, help="Bool separate policy&value networks")
     parser.add_argument('--action_std_init', type=float, default=0.0, help="Initial log action standard deviation.")

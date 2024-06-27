@@ -96,6 +96,11 @@ class MimiPPO:
         self.optimizer = optim.Adam( self.model.parameters(), lr = self.lr)
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 7500, min_lr = 2e-7 )
 
+        # anneal action standard deviation from init value to -10 => exp(-10) = 0.00004539992
+        self.final_log_std = -10.0
+        self.annealing_rate = (self.model.action_std[0] - self.final_log_std) / 5000000.
+
+
     def train(self):
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
@@ -122,7 +127,7 @@ class MimiPPO:
             if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
                 for i_epoch in range(self.n_epochs):   
                     data = NpDataset( ( [ele for ele in self.replayBuffer] ))
-                    total_loss = 0.
+                    total_loss = 0
 
                     if self.device.type == 'cuda':
                        self.model.to(self.device)
@@ -172,9 +177,13 @@ class MimiPPO:
                         self.writer.add_scalar('Loss/Value', value_loss.detach().cpu().numpy(), counter)
                         self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
                         self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
+                        self.writer.add_scalar('Param/action_std', self.model.action_std.data[0].cpu(), counter)
                         print(reward_batched.mean().cpu().numpy())
                         #self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
 
+            new_log_std = self.model.action_std - self.annealing_rate
+            self.model.action_std.data = torch.tensor(new_log_std).to(self.model.action_std.device)
+            #print(self.model.action_std.data)
 
             #print( 'Reward/train', reward_batched.mean().cpu().numpy())
 

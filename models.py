@@ -323,7 +323,7 @@ class MimiPPOPolicy(nn.Module):
         self.input_size = obs_dim
         self.action_dim = action_space
         self.separate_layers = separate_layers
-        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
+        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=False ) #True)
 
         self.shared_layers = MLP(self.encoder_output_size , 32, 32, 2, True)
         self.critic_layers = nn.Sequential( nn.Linear(32 , 1) )
