@@ -60,6 +60,7 @@ def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, 
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = []
+        np.random.seed(0) #TODO remove this, this is for testing if we can learn at least from n-traj many traj 
         seeds = np.random.randint(0, 10000, size=n_traj)
         for seed in seeds:
         #for _ in range(n_traj):

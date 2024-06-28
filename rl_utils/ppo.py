@@ -24,7 +24,7 @@ from rl_utils.torch_utils import  get_averaged_tensor # np_to_torch
 from rl_utils.traj_utils import *
 from rl_utils.buffer import *
 
-
+import wandb
 
 class MimiPPO:
     def __init__(self, 
@@ -32,6 +32,7 @@ class MimiPPO:
                 model_name,
                 env,
                 env_name,
+                #wandb_inst,
                 gamma=0.99, 
                 lambda_val = 0.95,
 
@@ -40,19 +41,20 @@ class MimiPPO:
                 std_coef = 2.0, #0.2 for state
 
                 max_grad_norm = 0.5, 
-                do_adv_norm=True, 
+                do_adv_norm = True, 
                 do_a2c = False, 
-                do_std_penalty = True,
+                #do_std_penalty = True,
 
-                n_trajectories = 16, #16, # 8, #4, 
-                n_actors = 8,
+                n_trajectories = 10, #4, # 16, #16, # 8, #4, 
+                n_actors = 8, #4, #40, #20, #8,  #8,
                 n_traj_steps = 40, #49,
                 lr = 0.0003,
-                epsilon = 0.2,
+                epsilon = 0.1, #0.2,
                 n_episodes = 500,
                 n_epochs =  10,
                 minibatch_size = 128, #256, #128,
-                max_env_steps = 5_000_000
+                max_env_steps = 5_000_000,
+                final_log_std = -10,
             ): #this is not a sad smiley but a duck with a very wide mouth
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -68,7 +70,7 @@ class MimiPPO:
         self.lambda_val = lambda_val
         self.do_adv_norm = do_adv_norm
         self.do_a2c = do_a2c
-        self.do_std_penalty = do_std_penalty # penalty on choising a large std on the action and thus converging to trivial solution 
+        #self.do_std_penalty = do_std_penalty # penalty on choising a large std on the action and thus converging to trivial solution 
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
         self.std_coef = std_coef
@@ -93,12 +95,16 @@ class MimiPPO:
 
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.writer = SummaryWriter('runs/RL_training_{}_{}_{}'.format(self.model_name,self.env_name ,self.timestamp))
+        #self.wandb_inst = wandb_inst
         self.optimizer = optim.Adam( self.model.parameters(), lr = self.lr)
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 7500, min_lr = 2e-7 )
 
         # anneal action standard deviation from init value to -10 => exp(-10) = 0.00004539992
-        self.final_log_std = -10.0
-        self.annealing_rate = (self.model.action_std[0] - self.final_log_std) / 5000000.
+        self.final_log_std = final_log_std
+        self.init_log_std = self.model.action_std.clone().detach()
+        self.annealing_rate = (self.init_log_std[0] - self.final_log_std) / 5000000.
+        self.annealing_rate.to("cpu") 
+        #self.annealing_rate = (self.final_log_std  / (self.init_log_std +1e-8)) ** (1. / 5000000.)
 
     def train(self):
         # We shall step through the amount of episodes #In each episode we step through the trajectory
@@ -123,8 +129,11 @@ class MimiPPO:
             #counter += (self.n_trajectories * self.n_actors * (self.n_traj_steps+1))
             counter += ( len(self.replayBuffer))
 
-            new_log_std = self.model.action_std.to('cpu') - self.annealing_rate.to("cpu")
-            self.model.action_std.data = torch.tensor(new_log_std)#.to(self.device)
+            new_log_std = self.init_log_std  - (self.annealing_rate * counter) 
+            #print("init std " , self.init_log_std, self.annealing_rate , counter, new_log_std)
+            #new_log_std = self.model.action_std.to('cpu')- (self.annealing_rate.to("cpu")  * counter) 
+            #new_log_std = self.model.action_std * (self.annealing_rate ** counter)
+            self.model.action_std.data = torch.tensor( new_log_std )#.to(self.device)
 
             if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
                 for i_epoch in range(self.n_epochs):   
@@ -181,6 +190,17 @@ class MimiPPO:
                         self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
                         self.writer.add_scalar('Param/action_std', self.model.action_std.data[0].cpu(), counter)
                         print(reward_batched.mean().cpu().numpy())
+
+                        #self.wandb_inst.log({
+                        wandb.log({
+                                'epoch': i_epoch + 1,
+                                'env_steps': counter ,
+                                'loss':  total_loss.item(),
+                                'loss_pg':  action_loss.detach().cpu().numpy(),
+                                'loss_vf':  value_loss.detach().cpu().numpy(),
+                                'average_reward': reward_batched.mean().cpu().numpy(),
+                                'action_std': self.model.action_std.data[0].cpu()
+                            })
                         #self.writer.add_scalar('LearningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
 
 

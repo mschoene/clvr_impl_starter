@@ -8,7 +8,10 @@ def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.orthogonal_(m.weight)
         m.bias.data.fill_(0.01)
-
+    elif isinstance(m, nn.Conv2d):
+        torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        if m.bias is not None:
+            m.bias.data.fill_(0)
 
 
 ###############################################################
@@ -267,7 +270,6 @@ class RewardPredictor(nn.Module):
 #    def forward(self, x):
 #        return self.encoder(x)
 
-
 ##############################################
 ### CNN for continous action spaces ###
 ##############################################
@@ -278,26 +280,27 @@ class CNN(nn.Module):
   
         self.conv_layers = nn.Sequential(
             nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
         )
         #self._initialize_flattened_size(input_channels, 64, 64)
         self.mlp_layers = nn.Sequential(
             nn.Linear(7*7*16, self.mlp_size ),
             #nn.Tanh(), # 
-            nn.ReLU(),
-            nn.Linear(self.mlp_size , self.mlp_size ),
+            #nn.ReLU(),
+            #nn.Linear(self.mlp_size , self.mlp_size ),
             #nn.Tanh(), # 
             nn.ReLU(),
         )
         self.conv_layers.apply(init_weights)
         self.mlp_layers.apply(init_weights)
+        self.conv_layers.apply(init_weights)
     
     def forward(self, x):
         # unbatched case, we unsqueeze the first dimenson to get a "batch" dim
@@ -311,11 +314,15 @@ class CNN(nn.Module):
         return x
     
 
+
+#class MLP(nn.Module):
+ #   def __init__(self, input_dim, output_dim, hidden_size=32, num_layers=3, do_final_activ = False):
+
 ###############################################################
 ### Policy maker: given an encoder make it into a MimiPPOP  ###
 ###############################################################
 class MimiPPOPolicy(nn.Module):
-    def __init__(self, enc, obs_dim, action_space, action_std_init,encoder_output_size= 64, separate_layers=False):
+    def __init__(self, enc, obs_dim, action_space, action_std_init,encoder_output_size= 64, separate_layers=False, hidden_layer_dim = 32, num_hidden_layers=2):
         super(MimiPPOPolicy, self).__init__()
 
         self.encoder = enc
@@ -323,16 +330,18 @@ class MimiPPOPolicy(nn.Module):
         self.input_size = obs_dim
         self.action_dim = action_space
         self.separate_layers = separate_layers
+        self.hidden_layer_dim = hidden_layer_dim
+        self.num_hidden_layers = num_hidden_layers
         self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=False ) #True)
 
-        self.shared_layers = MLP(self.encoder_output_size , 32, 32, 2, True)
-        self.critic_layers = nn.Sequential( nn.Linear(32 , 1) )
-        self.actor_layers = nn.Sequential( nn.Linear(32, self.action_dim), nn.Tanh())
+        self.shared_layers = MLP(self.encoder_output_size , 32, self.hidden_layer_dim, self.num_hidden_layers , True)
+        self.critic_layers = nn.Sequential( nn.Linear(self.hidden_layer_dim, 1) )
+        self.actor_layers = nn.Sequential( nn.Linear(self.hidden_layer_dim, self.action_dim), nn.Tanh())
         #self.critic_layers = nn.Sequential( nn.Linear(self.encoder_output_size , 1) )
         #self.actor_layers = nn.Sequential( nn.Linear(self.encoder_output_size, self.action_dim), nn.Tanh())
         if separate_layers:
-            self.actor_layers = nn.Sequential(MLP(self.encoder_output_size , self.action_dim, 32, 2),  nn.Tanh())
-            self.critic_layers = nn.Sequential(MLP(self.encoder_output_size , 1, 32, 2))
+            self.actor_layers = nn.Sequential(MLP(self.encoder_output_size , self.action_dim, self.hidden_layer_dim, self.num_hidden_layers ),  nn.Tanh())
+            self.critic_layers = nn.Sequential(MLP(self.encoder_output_size , 1, self.hidden_layer_dim, self.num_hidden_layers ))
 
         self.shared_layers.apply(init_weights)
         self.actor_layers.apply(init_weights)
