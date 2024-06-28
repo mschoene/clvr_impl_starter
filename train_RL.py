@@ -60,6 +60,7 @@ def set_parameter_requires_grad(model, requires_grad=False):
 #    })
 
 sweep_config = {
+    'name': 'cnn_sweep',
     'method': 'grid',  # You can also use 'random' or 'bayes'
     'metric': {
         'name': 'average_reward',
@@ -96,7 +97,9 @@ def train(wandb_config, wandb_instance, args):
     #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
     #wandb.init(project='your_project_name', config=wandb_config)
 
-
+    #config = wandb.config
+    wandb.init(project='clvr_starter') #, config=wandb_config)
+    
     actions_space_std =  args.action_std_init #0. #-1. #0 #-1. # 0.5
     ent_coef = args.ent_coef
     minibatch_size = args.minibatch_size
@@ -220,14 +223,18 @@ def train(wandb_config, wandb_instance, args):
 
 
 def main(args):
-    sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
 
     def sweep_train():
         config = wandb.config
-        wandb.init(project='clvr_starter', config=config)  # Initialize WandB inside the sweep_train function
+        #wandb.init(project='clvr_starter', config=config)  # Initialize WandB inside the sweep_train function
         train(wandb, config, args)
     
-    wandb.agent(sweep_id, function=sweep_train)
+    #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
+
+    #print(sweep_id)
+    sweep_id = '7nfe067v'
+    wandb.agent(sweep_id, function=sweep_train, project="clvr_starter")
+    #wandb.agent(sweep_id, function=sweep_train)
 
 
 if __name__ == "__main__":
