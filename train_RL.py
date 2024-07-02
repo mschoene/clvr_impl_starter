@@ -60,33 +60,44 @@ def set_parameter_requires_grad(model, requires_grad=False):
 #    })
 
 sweep_config = {
-    'name': 'cnn_sweep',
-    'method': 'grid',  # You can also use 'random' or 'bayes'
+    'name': 'cnn_sweep_radam',
+    'method': 'bayes',  # You can also use 'random' or 'bayes'
     'metric': {
         'name': 'average_reward',
         'goal': 'maximize'
     },
     'parameters': {
+        'n_actors': {
+            'values': [1,2,4,8]
+        },      
+        'n_traj': {
+            'values': [10,20] 
+        },
         'batch_size': {
             'values': [32, 64, 128]
         },
         'clip_param': {
             'values': [0.1, 0.2]
-        },
-        'learning_rate': {
-            'values': [1e-4, 1e-5]
-        },
-        'n_traj': {
-            'values': [10,20,40]
-        },     
-        'final_log_std': {
-            'values': [-10, -20]
         },     
         'actions_space_std': {
-            'values': [-1, -0.5, 0.0, 0.5, 1, 2]
+            'values': [ -0.5, -1.0]
         }
     }
 }
+
+import gym
+
+
+class ScaledReward(gym.RewardWrapper):
+    def __init__(self, env, min_reward=0.65, max_reward=1):
+        super().__init__(env)
+        self.min_reward = min_reward
+        self.max_reward = max_reward
+        self.reward_range = (min_reward, max_reward)
+    
+    def reward(self, reward):
+        scaled_reward = 2 * (reward - 0.65) / (1- 0.65)
+        return scaled_reward
 
 # Initialize the sweep
 #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
@@ -111,16 +122,20 @@ def train(wandb_config, wandb_instance, args):
     ac_hidden_layers = 2
     ac_hidden_size = 32
     epsilon = args.epsilon
-    learning_rate = 1e-4
+    learning_rate = args.learning_rate # 1e-4
     final_log_std = args.action_std_final
+    n_traj = args.n_traj
+    n_actors = args.n_actors
 
     # Get hyperparameters from wandb.config
-    minibatch_size = wandb.config.batch_size
-    epsilon = wandb.config.clip_param
-    learning_rate = wandb.config.learning_rate
-    final_log_std = wandb.config.final_log_std
-    actions_space_std = wandb.config.actions_space_std
-    n_traj = wandb.config.n_traj
+    if args.do_sweep:
+        minibatch_size = wandb.config.batch_size
+        epsilon = wandb.config.clip_param
+        #learning_rate = wandb.config.learning_rate
+        #final_log_std = wandb.config.final_log_std
+        actions_space_std = wandb.config.actions_space_std
+        n_traj = wandb.config.n_traj
+        n_actors = wandb.config.n_actors
     
 
     if model_name == 'oracle':
@@ -134,7 +149,7 @@ def train(wandb_config, wandb_instance, args):
     elif model_name == 'cnn':
         #ent_coef = 0.0004 #0.0005
         encoder = CNN()  # --ent_coef 0.0004 --std_coef 0.2 --minibatch_size 128
-        ac_hidden_layers = 1
+        ac_hidden_layers = 2# 1
         ac_hidden_size = 64
 
         #policy = MimiPPOPolicy(encoder=cnn_encoder, obs_dim=obs_dim, action_space=action_space, action_std_init=action_std_init, encoder_output_size=encoder_output_size)
@@ -180,8 +195,9 @@ def train(wandb_config, wandb_instance, args):
         raise ValueError(f"Unknown model name: {model_name}")
 
     env = gym.make(env_name)
+    env = ScaledReward(env)
     env.seed(1)
-    torch.manual_seed(0)
+    torch.manual_seed(1)
 
     #model = model_cls(env.observation_space.shape[0], env.action_space.shape[0], actions_space_std)
     model = MimiPPOPolicy(enc=encoder, 
@@ -207,7 +223,9 @@ def train(wandb_config, wandb_instance, args):
                           epsilon=epsilon,
                           lr=learning_rate,
                           final_log_std=final_log_std,
-                          n_trajectories=n_traj        
+                          n_trajectories=n_traj,
+                          off_poli_factor=args.off_p_frac,
+                          n_actors=n_actors
                           )
 
     #ppo_trainer = MimiPPO( model, env)
@@ -224,17 +242,23 @@ def train(wandb_config, wandb_instance, args):
 
 def main(args):
 
-    def sweep_train():
-        config = wandb.config
-        #wandb.init(project='clvr_starter', config=config)  # Initialize WandB inside the sweep_train function
-        train(wandb, config, args)
-    
-    #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
+    if args.do_sweep:
+        def sweep_train():
+            config = wandb.config
+            #wandb.init(project='clvr_starter', config=config)  # Initialize WandB inside the sweep_train function
+            train(wandb, config, args)
 
-    #print(sweep_id)
-    sweep_id = '7nfe067v'
-    wandb.agent(sweep_id, function=sweep_train, project="clvr_starter")
-    #wandb.agent(sweep_id, function=sweep_train)
+        #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
+
+        #print(sweep_id)
+        sweep_id = 'wvekjp8m' #'7nfe067v'
+        wandb.agent(sweep_id, function=sweep_train, project="clvr_starter")
+        #wandb.agent(sweep_id, function=sweep_train)
+    else:
+        config = wandb.config
+        train(wandb, config, args)
+
+
 
 
 if __name__ == "__main__":
@@ -251,6 +275,11 @@ if __name__ == "__main__":
     parser.add_argument('--action_std_init', type=float, default=0.0, help="Initial log action standard deviation.")
     parser.add_argument('--action_std_final', type=float, default=0.0, help="Initial log action standard deviation.")
     parser.add_argument('--epsilon', type=float, default=0.2, help="Advantage clipping factor.")
+    parser.add_argument('--do_sweep', type=bool, default=False, help="Do a HP sweep")
+    parser.add_argument('--n_traj', type=int, default=10, help="Number trajectories to sample.")
+    parser.add_argument('--learning_rate', type=float, default=0.0001, help="Learning rate")
+    parser.add_argument('--off_p_frac', type=float, default=1.0, help="Fraction of off policy events to keep in replay buffer")
+    parser.add_argument('--n_actors', type=int, default=4, help="Number of actors ")
 
     args = parser.parse_args()
     #wandb.config.update(args)

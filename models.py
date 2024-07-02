@@ -280,14 +280,15 @@ class CNN(nn.Module):
   
         self.conv_layers = nn.Sequential(
             nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride),
-            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
+            nn.Flatten(),
         )
         #self._initialize_flattened_size(input_channels, 64, 64)
         self.mlp_layers = nn.Sequential(
@@ -308,7 +309,7 @@ class CNN(nn.Module):
             x = x.unsqueeze(0)
         x = self.conv_layers(x)
         # Flatten the output from the CNN keeping the batch size
-        x = x.view(x.size(0), -1)  
+        #x = x.view(x.size(0), -1)  
         # Forward pass through MLP
         x = self.mlp_layers(x)
         return x
@@ -332,7 +333,8 @@ class MimiPPOPolicy(nn.Module):
         self.separate_layers = separate_layers
         self.hidden_layer_dim = hidden_layer_dim
         self.num_hidden_layers = num_hidden_layers
-        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=False ) #True)
+        #self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=False ) #True)
+        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
 
         self.shared_layers = MLP(self.encoder_output_size , 32, self.hidden_layer_dim, self.num_hidden_layers , True)
         self.critic_layers = nn.Sequential( nn.Linear(self.hidden_layer_dim, 1) )

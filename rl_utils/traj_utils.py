@@ -10,12 +10,26 @@ import gym
 import multiprocessing as mp
 
 
+class ScaledReward(gym.RewardWrapper):
+    def __init__(self, env, min_reward=0.65, max_reward=1):
+        super().__init__(env)
+        self.min_reward = min_reward
+        self.max_reward = max_reward
+        self.reward_range = (min_reward, max_reward)
+    
+    def reward(self, reward):
+        scaled_reward = 2 * (reward - 0.65) / (1- 0.65)
+        return scaled_reward
+
 EpisodeStep = namedtuple('EpisodeStep', ['state', 'action', 'action_probas', 'reward', 'done', 'value', 'ret', 'advantage'])
 
 
 def collect_trajectory_step(actor, state, env, episode):
     action, action_proba, value = actor.act(state) 
     next_state_obs, reward, done, _ = env.step(action) # dont need the info, put in _
+    #next_state_obs, reward, done = env.step(action) # dont need the info, put in _
+    #reward = reward - 0.6
+    #reward =  2 * (reward - 0.65) / (1- 0.65)
     episode.append(EpisodeStep(state, action, action_proba, reward, done, value, 0., 0.))
 
     return np_to_torch(next_state_obs), done
@@ -23,6 +37,7 @@ def collect_trajectory_step(actor, state, env, episode):
 def collect_trajectory(seed, actor, env_name, max_steps):
     episode = []
     env = gym.make(env_name)
+    #env = ScaledReward(env)
     env.seed(seed)
     state = env.reset()
     state = np_to_torch(state)
@@ -60,9 +75,10 @@ def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, 
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = []
-        np.random.seed(0) #TODO remove this, this is for testing if we can learn at least from n-traj many traj 
+        #np.random.seed(0) #TODO each worker produces n_traj many different env 
         seeds = np.random.randint(0, 10000, size=n_traj)
-        for seed in seeds:
+        #print(seeds)
+        for seed in seeds: # collect bundle (nworker many) traj with same starting point
         #for _ in range(n_traj):
             future = executor.submit(collect_trajectory,seed, actor, env_name, n_traj_steps)
             #calc_discd_vals(future.result(), gamma, lambda_val)
