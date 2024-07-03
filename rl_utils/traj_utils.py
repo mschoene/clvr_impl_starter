@@ -38,7 +38,9 @@ def collect_trajectory(seed, actor, env_name, max_steps):
     episode = []
     env = gym.make(env_name)
     #env = ScaledReward(env)
+    #seed = np.random.randint(0, 10000)
     env.seed(seed)
+    #env.seed(0)
     state = env.reset()
     state = np_to_torch(state)
     with torch.no_grad():
@@ -93,9 +95,33 @@ def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, 
 
 def calc_discd_vals(episode, gamma, lambda_val):
     # Initialize tensors
+
+
+
     advantages = torch.zeros(len(episode), dtype=torch.float32)
     returns = torch.zeros(len(episode), dtype=torch.float32)
     last_adv = 0.0
+
+    for t in reversed(range(len(episode))):
+        reward = episode[t].reward
+        value = episode[t].value
+        if t < len(episode) - 1:
+            next_value = episode[t + 1].value
+            delta = reward + gamma * next_value - value
+            last_adv = delta + gamma * lambda_val * last_adv
+        else:
+            delta = reward - value
+            last_adv = delta
+
+        advantages[t] = last_adv
+        returns[t] = advantages[t] + value  # Returns are advantages plus value estimates
+
+    updated_episode = []
+    for i in range(len(episode)):
+        updated_step = episode[i]._replace(advantage=advantages[i], ret=returns[i])
+        updated_episode.append(updated_step)
+
+    return updated_episode
 
     for t in reversed(range(len(episode))):
         reward = episode[t].reward
@@ -111,10 +137,3 @@ def calc_discd_vals(episode, gamma, lambda_val):
             # For the last timestep
             advantages[t] = reward - value
             returns[t] = reward + value
-
-    updated_episode = []
-    for i in range(len(episode)):
-        updated_step = episode[i]._replace(advantage=advantages[i], ret=returns[i])
-        updated_episode.append(updated_step)
-
-    return updated_episode

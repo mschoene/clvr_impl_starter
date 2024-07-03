@@ -56,8 +56,13 @@ def make_histos(buffer):
     plt.tight_layout()
 
     plt.savefig('histograms_actions.png')
-    #plt.close()
+    #plt.close('all')
 
+def update_linear_schedule(optimizer, epoch, total_num_epochs, initial_lr):
+    """Decreases the learning rate linearly"""
+    lr = initial_lr - (initial_lr * (epoch / float(total_num_epochs)))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 
 class MimiPPO:
@@ -72,10 +77,10 @@ class MimiPPO:
 
                 ent_coef = 0.005, 
                 vf_coef=0.5, 
-                std_coef = 2.0, #0.2 for state
+                std_coef =  0.0, #01, #2.0, #0.2 for state
 
                 max_grad_norm = 0.5, 
-                do_adv_norm = True, 
+                do_adv_norm = True, #False, #True, 
                 do_a2c = False, 
                 #do_std_penalty = True,
 
@@ -90,6 +95,9 @@ class MimiPPO:
                 max_env_steps = 5_000_000,
                 final_log_std = -10,
                 off_poli_factor = 1,
+                do_wandb = False,
+                do_vf_clip = True, 
+                do_lin_lr_decay = True,
             ): #this is not a sad smiley but a very hungry duck
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -118,10 +126,7 @@ class MimiPPO:
         self.n_epochs =  n_epochs  #number of optim steps on a given buffer data set
 
         self.off_poli_factor = off_poli_factor # fraction of steps from old collection ie off policy
-        #self.buffer_size = 4 * n_actors* (self.n_traj_steps+1)*self.n_trajectories # M = N*T thus defining the number of actors as N = M/T
-        #self.buffer_size = n_actors* (self.n_traj_steps+1)*self.n_trajectories # M = N*T thus defining the number of actors as N = M/T
-        self.buffer_size = int( self.off_poli_factor *  n_actors* (self.n_traj_steps+1)*self.n_trajectories ) # M = N*T thus defining the number of actors as N = M/T
-        #self.buffer_size = 4* 2* 8 * (self.n_traj_steps+1) # M = N*T thus defining the number of actors as N = M/T
+        self.buffer_size = int( self.off_poli_factor *  n_actors* (self.n_traj_steps)*self.n_trajectories ) # M = N*T thus defining the number of actors as N = M/T
 
         #self.batch_size = n_actors * (self.n_traj_steps+1)*self.n_trajectories  #256 #512 #1024  #64 #32 #64 #128 #32 #128
 
@@ -134,8 +139,8 @@ class MimiPPO:
         self.writer = SummaryWriter('runs/RL_training_{}_{}_{}'.format(self.model_name,self.env_name ,self.timestamp))
         #self.wandb_inst = wandb_inst
         #self.optimizer = optim.Adam(self.model.parameters(), lr = self.lr)
-        #self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, eps=1e-4)
-        self.optimizer = optim.RAdam( self.model.parameters(), betas = (0.9, 0.999))
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, eps=1e-4)
+        #self.optimizer = optim.RAdam( self.model.parameters(), betas = (0.9, 0.999))
 
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 1500, min_lr = 1e-5 )
 
@@ -145,7 +150,10 @@ class MimiPPO:
         self.annealing_rate = (self.init_log_std[0] - self.final_log_std) / 5000000.
         self.annealing_rate.to("cpu") 
         #self.annealing_rate = (self.final_log_std  / (self.init_log_std +1e-8)) ** (1. / 5000000.)
-
+        self.do_wandb = do_wandb
+        self.do_vf_clip = do_vf_clip
+        self.do_lin_lr_decay = do_lin_lr_decay
+        
     def train(self):
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
@@ -168,7 +176,8 @@ class MimiPPO:
             ###
             #counter += (self.n_trajectories * self.n_actors * (self.n_traj_steps))
             #counter += int ( len(self.replayBuffer))
-            counter += int ( (self.buffer_size)/self.off_poli_factor  )
+            if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
+                counter += int ( (self.buffer_size)/self.off_poli_factor  )
 
             #if(counter > 100000):
             #    new_log_std = self.init_log_std  - (self.annealing_rate * counter) 
@@ -192,11 +201,13 @@ class MimiPPO:
 
                     for _, sample_batched in enumerate(dataloader):
 
-                        pos_t_batched, actions_batched, action_probas_old_batched, advantage_batched, return_batched, reward_batched = extract_values_from_batch(sample_batched, self.minibatch_size)
+                        pos_t_batched, actions_batched, action_probas_old_batched, \
+                            advantage_batched, return_batched, reward_batched, value_batched \
+                                = extract_values_from_batch(sample_batched, self.minibatch_size)
                         
                         if(self.do_adv_norm):
                             advantage_batched = get_averaged_tensor(advantage_batched)
-                            return_batched = get_averaged_tensor(return_batched)
+                            #return_batched = get_averaged_tensor(return_batched)
 
                         #evaluate state action:
                         action_probas_prop, value_prop, entropy_prop = self.model.evaluate(pos_t_batched, actions_batched)
@@ -213,14 +224,22 @@ class MimiPPO:
                             #action_loss = -torch.min(act1 /(act1.mean()), act2 /(act2.mean()) ).mean() 
                             #action_loss = (action_loss/ (ap_ratio.mean()) ).mean()
 
-                        value_loss = F.mse_loss(value_prop.squeeze(), return_batched.squeeze())
+                        if self.do_vf_clip:
+                            value_loss =  (value_batched.squeeze() - return_batched.squeeze()).pow(2)
+
+                            value_clip = value_batched.squeeze().squeeze() + torch.clamp( value_prop -value_batched, -self.epsilon, self.epsilon)
+                            value_loss_clipped = (value_clip - return_batched ).pow(2)
+                            # value_loss = F.mse_loss(value_prop.squeeze(), return_batched.squeeze())
+                            value_loss = torch.max(value_loss, value_loss_clipped).mean()
+                        else:
+                            value_loss = F.mse_loss(value_prop.squeeze(), return_batched.squeeze())
                         #entropy_loss = - entropy_prop.mean()
 
                         #to keep it from exploding and just going random/max action rather than trying to predict the correct mean
-                        #log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() * ( counter / self.max_env_steps )
+                        log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() * ( counter / self.max_env_steps )
 
                         # total loss 
-                        total_loss = self.vf_coef * value_loss + action_loss  #+ self.ent_coef * entropy_loss + log_std_penalty_loss
+                        total_loss = self.vf_coef * value_loss + action_loss  +  log_std_penalty_loss #self.ent_coef * entropy_loss +
 
                         self.optimizer.zero_grad()
                         total_loss.mean().backward()
@@ -237,17 +256,19 @@ class MimiPPO:
                         print(reward_batched.mean().cpu().numpy())
                         self.writer.add_scalar('Param/learningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
 
-                        #self.wandb_inst.log({
-                        wandb.log({
-                                'epoch': i_epoch + 1,
-                                'env_steps': counter ,
-                                'loss':  total_loss.item(),
-                                'loss_pg':  action_loss.detach().cpu().numpy(),
-                                'loss_vf':  value_loss.detach().cpu().numpy(),
-                                'average_reward': reward_batched.mean().cpu().numpy(),
-                                'action_std': self.model.action_std.data[0].cpu()
-                        })
+                        if self.do_wandb:
+                            wandb.log({
+                                    'epoch': i_epoch + 1,
+                                    'env_steps': counter ,
+                                    'loss':  total_loss.item(),
+                                    'loss_pg':  action_loss.detach().cpu().numpy(),
+                                    'loss_vf':  value_loss.detach().cpu().numpy(),
+                                    'average_reward': reward_batched.mean().cpu().numpy(),
+                                    'action_std': self.model.action_std.data[0].cpu()
+                            })
                     #self.scheduler.step(total_loss)
+                if self.do_lin_lr_decay:
+                    update_linear_schedule(self.optimizer, counter, self.max_env_steps, self.lr)
 
             #make_histos(self.replayBuffer)
             #print(self.model.action_std.data)
