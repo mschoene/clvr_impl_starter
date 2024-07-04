@@ -3,7 +3,9 @@ import math
 import torch
 from torch.distributions import MultivariateNormal
 
-# helper function to init weights orthogonally 
+###############################################################
+# helper function to init weights orthogonally / kaiming
+###############################################################
 def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.orthogonal_(m.weight)
@@ -11,7 +13,7 @@ def init_weights(m):
     elif isinstance(m, nn.Conv2d):
         torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
         if m.bias is not None:
-            m.bias.data.fill_(0)
+            m.bias.data.fill_(0.01)
 
 
 ###############################################################
@@ -293,10 +295,6 @@ class CNN(nn.Module):
         #self._initialize_flattened_size(input_channels, 64, 64)
         self.mlp_layers = nn.Sequential(
             nn.Linear(7*7*16, self.mlp_size ),
-            #nn.Tanh(), # 
-            #nn.ReLU(),
-            #nn.Linear(self.mlp_size , self.mlp_size ),
-            #nn.Tanh(), # 
             nn.ReLU(),
         )
         self.conv_layers.apply(init_weights)

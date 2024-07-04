@@ -68,22 +68,22 @@ sweep_config = {
     },
     'parameters': {
         'n_actors': {
-            'values': [6,8,10]
+            'values': [16,12,20]
         },      
         'n_traj': {
-            'values': [4,6,8] 
+            'values': [10, 12, 14] 
         },
         'batch_size': {
-            'values': [32, 64, 128]
+            'values': [256,512, 128]
         },
         'clip_param': {
             'values': [0.1, 0.2]
         },     
         'actions_space_std': {
-            'values': [ 0.0, -0.5, 0.5]
+            'values': [ 0.0]
         },        
-        'vf_coef': {
-            'values': [0.5, 0.25, 0.75]
+        'std_coef': {
+            'values': [0.001, 0.0001, 0.00001]
         }
     }
 }
@@ -131,7 +131,7 @@ def train(wandb_config, wandb_instance, args):
         actions_space_std = wandb.config.actions_space_std
         n_traj = wandb.config.n_traj
         n_actors = wandb.config.n_actors
-        vf_coef = wandb.config.vf_coef
+        std_coef = wandb.config.std_coef
     
 
     if model_name == 'oracle':
@@ -145,8 +145,10 @@ def train(wandb_config, wandb_instance, args):
     elif model_name == 'cnn':
         #ent_coef = 0.0004 #0.0005
         encoder = CNN()  # --ent_coef 0.0004 --std_coef 0.2 --minibatch_size 128
-        ac_hidden_layers = 2# 1
+        ac_hidden_layers = 1 #2# 1
         ac_hidden_size = 64
+        separate_ac_mlps = True # TODO just a test if split works better at all
+
 
         #policy = MimiPPOPolicy(encoder=cnn_encoder, obs_dim=obs_dim, action_space=action_space, action_std_init=action_std_init, encoder_output_size=encoder_output_size)
     elif model_name == 'img':
@@ -245,10 +247,10 @@ def main(args):
             #wandb.init(project='clvr_starter', config=config)  # Initialize WandB inside the sweep_train function
             train(wandb, config, args)
 
-        #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
+        sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
 
         #print(sweep_id)
-        sweep_id = 'lzeyi0wd' # 'wvekjp8m' #'7nfe067v'
+        sweep_id = 'sh3m6vfo' #'lzeyi0wd' # 'wvekjp8m' #'7nfe067v'
         wandb.agent(sweep_id, function=sweep_train, project="clvr_starter")
         #wandb.agent(sweep_id, function=sweep_train)
     else:
