@@ -95,9 +95,6 @@ def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, 
 
 def calc_discd_vals(episode, gamma, lambda_val):
     # Initialize tensors
-
-
-
     advantages = torch.zeros(len(episode), dtype=torch.float32)
     returns = torch.zeros(len(episode), dtype=torch.float32)
     last_adv = 0.0

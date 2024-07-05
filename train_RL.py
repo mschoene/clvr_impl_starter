@@ -18,7 +18,8 @@ def make_histos(ppo_trainer):
 
     #print(repBuf[0][1][0])
     for item in range(len(ppo_trainer.replayBuffer)):
-        x, y = ppo_trainer.replayBuffer[item][1][0].tolist()
+        #x, y = ppo_trainer.replayBuffer[item][1][0].tolist()
+        x, y = ppo_trainer.replayBuffer[item][1].tolist()
         x_values.append(x)
         y_values.append(y)
     x_values = np.array(x_values)
@@ -48,7 +49,7 @@ def load_pretrained_weights(model, pretrained_path):
     model.load_state_dict(torch.load(pretrained_path, map_location=device))
     return model
 
-#Freeze params with True
+#Freeze params with False
 def set_parameter_requires_grad(model, requires_grad=False):
     for param in model.parameters():
         param.requires_grad = requires_grad
@@ -60,7 +61,7 @@ def set_parameter_requires_grad(model, requires_grad=False):
 #    })
 
 sweep_config = {
-    'name': 'cnn_sweep_newVF',
+    'name': 'cnn_sweep_fixedLPsum',
     'method': 'bayes',  # You can also use 'random' or 'bayes'
     'metric': {
         'name': 'average_reward',
@@ -68,25 +69,32 @@ sweep_config = {
     },
     'parameters': {
         'n_actors': {
-            'values': [16,12,20]
+            'values': [12, 8, 4]
         },      
         'n_traj': {
-            'values': [10, 12, 14] 
+            'values': [8,10, 4] 
         },
         'batch_size': {
-            'values': [256,512, 128]
+            'values': [32, 64, 128]
         },
         'clip_param': {
             'values': [0.1, 0.2]
         },     
-        'actions_space_std': {
-            'values': [ 0.0]
+        'do_sep_ac': {
+            'values': [ 0, 1 ]
+        },          
+        'ac_hidden_layers': {
+            'values': [ 1, 2 ]
         },        
         'std_coef': {
-            'values': [0.001, 0.0001, 0.00001]
+            'values': [0.1, 0.01, 0.001, 0.0001, 0.00001]
+        },        
+        'learning_rate': {
+            'values': [0.0001, 0.0003, 0.00001]
         }
     }
 }
+
 
 import gym
 
@@ -126,17 +134,18 @@ def train(wandb_config, wandb_instance, args):
     if args.do_sweep:
         minibatch_size = wandb.config.batch_size
         epsilon = wandb.config.clip_param
-        #learning_rate = wandb.config.learning_rate
+        learning_rate = wandb.config.learning_rate
         #final_log_std = wandb.config.final_log_std
-        actions_space_std = wandb.config.actions_space_std
         n_traj = wandb.config.n_traj
         n_actors = wandb.config.n_actors
         std_coef = wandb.config.std_coef
+        separate_ac_mlps = wandb.config.do_sep_ac
+        ac_hidden_layers = wandb.config.ac_hidden_layers
     
 
     if model_name == 'oracle':
         #ent_coef = 0.05
-        minibatch_size = 64
+        #minibatch_size = 64
         separate_ac_mlps = False
         env_name = f'SpritesState-v{args.n_distractors}'
         env = gym.make(env_name)
@@ -147,8 +156,8 @@ def train(wandb_config, wandb_instance, args):
         encoder = CNN()  # --ent_coef 0.0004 --std_coef 0.2 --minibatch_size 128
         ac_hidden_layers = 1 #2# 1
         ac_hidden_size = 64
-        separate_ac_mlps = True # TODO just a test if split works better at all
-
+        #separate_ac_mlps = True # TODO just a test if split works better at all
+        #separate_ac_mlps = True #False
 
         #policy = MimiPPOPolicy(encoder=cnn_encoder, obs_dim=obs_dim, action_space=action_space, action_std_init=action_std_init, encoder_output_size=encoder_output_size)
     elif model_name == 'img':
@@ -247,10 +256,10 @@ def main(args):
             #wandb.init(project='clvr_starter', config=config)  # Initialize WandB inside the sweep_train function
             train(wandb, config, args)
 
-        sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
+        #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
 
         #print(sweep_id)
-        sweep_id = 'sh3m6vfo' #'lzeyi0wd' # 'wvekjp8m' #'7nfe067v'
+        sweep_id = '8vibecax' # 'sh3m6vfo' #'lzeyi0wd' # 'wvekjp8m' #'7nfe067v'
         wandb.agent(sweep_id, function=sweep_train, project="clvr_starter")
         #wandb.agent(sweep_id, function=sweep_train)
     else:
@@ -264,15 +273,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train MimiPPO model with specified parameters.")
     parser.add_argument('--model_name', type=str, required=True, help="Model name to use ('oracle', 'cnn', 'enc', 'enc_ft', 'repr', 'repr_ft').")
 
-    parser.add_argument('--std_coef', type=float, default=0.0, help="Standard deviation coefficient.")
-    parser.add_argument('--ent_coef', type=float, default=0.0015, help="Entropy coefficient.")
+    parser.add_argument('--std_coef', type=float, default=0.0001, help="Standard deviation coefficient.")
+    parser.add_argument('--ent_coef', type=float, default=0.001, help="Entropy coefficient.")
     parser.add_argument('--vf_coef', type=float, default=0.5, help="Value function coefficient.")
 
     parser.add_argument('--minibatch_size', type=int, default=128, help="Minibatch size.")
     parser.add_argument('--n_distractors', type=int, choices=range(4), default=0, help="Number of distractors (0 to 3).")
     parser.add_argument('--n_episodes', type=int, default=500, help="Number of episodes, default 500.")
     parser.add_argument('--n_env_steps', type=int,  default=5000000, help="Number of episodes, default 5M.")
-    parser.add_argument('--sep_ac', type=bool,  default=True, help="Bool separate policy & value networks")
+    parser.add_argument('--sep_ac', type=int,  default=1, help="0/1  separate policy & value networks")
     parser.add_argument('--action_std_init', type=float, default=0.0, help="Initial log action standard deviation.")
     parser.add_argument('--action_std_final', type=float, default=0.0, help="Initial log action standard deviation.")
     parser.add_argument('--epsilon', type=float, default=0.1, help="Advantage clipping factor.")

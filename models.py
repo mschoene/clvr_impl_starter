@@ -7,14 +7,19 @@ from torch.distributions import MultivariateNormal
 # helper function to init weights orthogonally / kaiming
 ###############################################################
 def init_weights(m):
-    if isinstance(m, nn.Linear):
-        torch.nn.init.orthogonal_(m.weight)
-        m.bias.data.fill_(0.01)
-    elif isinstance(m, nn.Conv2d):
-        torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-        if m.bias is not None:
-            m.bias.data.fill_(0.01)
-
+   if isinstance(m, nn.Linear):
+       torch.nn.init.orthogonal_(m.weight)
+       m.bias.data.fill_(0.01)
+   elif isinstance(m, nn.Conv2d):
+       torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+       if m.bias is not None:
+           m.bias.data.fill_(0.01)
+#
+#def init_weights(m):
+#    if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+#        nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+#        if m.bias is not None:
+#            nn.init.constant_(m.bias, 0)
 
 ###############################################################
 ### MLP for arbitrary many MLP layers ###
@@ -282,13 +287,13 @@ class CNN(nn.Module):
   
         self.conv_layers = nn.Sequential(
             nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Flatten(),
         )
@@ -321,12 +326,12 @@ class CNN(nn.Module):
 ### Policy maker: given an encoder make it into a MimiPPOP  ###
 ###############################################################
 class MimiPPOPolicy(nn.Module):
-    def __init__(self, enc, obs_dim, action_space, action_std_init,encoder_output_size= 64, separate_layers=False, hidden_layer_dim = 32, num_hidden_layers=2):
+    def __init__(self, enc, obs_dim, action_space, action_std_init, encoder_output_size= 64, separate_layers=0, hidden_layer_dim = 32, num_hidden_layers=2):
         super(MimiPPOPolicy, self).__init__()
 
         self.encoder = enc
         self.encoder_output_size = encoder_output_size
-        self.input_size = obs_dim
+        #self.input_size = obs_dim
         self.action_dim = action_space
         self.separate_layers = separate_layers
         self.hidden_layer_dim = hidden_layer_dim
@@ -334,7 +339,7 @@ class MimiPPOPolicy(nn.Module):
         #self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=False ) #True)
         self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
 
-        self.shared_layers = MLP(self.encoder_output_size , 32, self.hidden_layer_dim, self.num_hidden_layers , True)
+        self.shared_layers = MLP(self.encoder_output_size , output_dim = self.hidden_layer_dim, hidden_size=self.hidden_layer_dim, num_layers=self.num_hidden_layers , do_final_activ= True)
         self.critic_layers = nn.Sequential( nn.Linear(self.hidden_layer_dim, 1) )
         self.actor_layers = nn.Sequential( nn.Linear(self.hidden_layer_dim, self.action_dim), nn.Tanh())
         #self.critic_layers = nn.Sequential( nn.Linear(self.encoder_output_size , 1) )
@@ -348,12 +353,22 @@ class MimiPPOPolicy(nn.Module):
         self.critic_layers.apply(init_weights)
 
     def forward(self, x):
+        #print("                                              forward x shape1 ", x.shape )
+
         x = self.encoder(x)
+        #print("                                                 forward x shape2 ", x.shape )
+
+        #print("encoded image ", x)
+        #assert x.shape == self.encoder_output_size, print(x.shape )
         if not self.separate_layers:
             x = self.shared_layers(x)
+
+        #print("                                                      forward x shape3 ", x.shape )
         value = self.critic_layers(x)
         actor_output = self.actor_layers(x)
+        #print("actor output shape ", actor_output.shape)
 
+        #print("value ", value, "    actor out ", actor_output)
         below_threshold = torch.exp(self.action_std) * (self.action_std <= 0)
         # Avoid NaN: zeros values that are below zero
         safe_log_std = self.action_std * (self.action_std > 0) + 1e-6
@@ -361,8 +376,11 @@ class MimiPPOPolicy(nn.Module):
         std = below_threshold + above_threshold
         
         action_cov = torch.diag(std)
+        #print(action_cov, self.action_std)
         #action_cov = torch.diag(self.action_std)
         dist = MultivariateNormal(actor_output, action_cov)
+        #print("|||||||||||||| distr  forward   |||||||||||| ",  dist )
+
         return dist, value
     
     #return action, action logs probabs and value
@@ -372,15 +390,29 @@ class MimiPPOPolicy(nn.Module):
             action = dist.mean
         else:
             action = dist.rsample()
-        action_log_probs = dist.log_prob(action).sum(dim=-1)
-        return action, action_log_probs, value
+        #action_log_probs = dist.log_prob(action)
+        #print("log probs not summed ", action_log_probs.shape, action_log_probs)
+        action_log_probs = dist.log_prob(action)#.sum(dim=-1)
+        #print("summed ", action_log_probs.shape, action_log_probs)
+        #print(  "in act >>>>>>>>>>>>>" , action.shape, action_log_probs.shape, value.shape)
+        #action.squeeze()
+        #print(value.shape, action.shape)
+        return action.squeeze(), action_log_probs, value.squeeze()
 
     #evaluating model for a given action
     def evaluate(self, state, action):
+        #print("|||||||||||||| state |||||||||||| ", state.shape )
+        #print("|||||||||||||| action     |||||||||||| ", action.shape )
         dist, value = self(state)
-        action_log_probs = dist.log_prob(action).sum(dim=-1)
+        #print("|||||||||||||| distr     |||||||||||| ",  dist )
+
+        action_log_probs = dist.log_prob(action)#.sum(dim=-1)
+        #print("action ==================  ", action )
+        #print("eval log prob        ", action_log_probs)
         dist_entropy = dist.entropy().sum(dim=-1)
-        return action_log_probs, value, dist_entropy 
+        #print("eval ", value.shape)
+        #print( "in eval <<<<<<<<<<<<<<<<<<<<< ", action.shape, action_log_probs.shape, value.shape)
+        return action_log_probs, value.squeeze(), dist_entropy 
 
 
 
@@ -400,7 +432,8 @@ class Oracle(nn.Module):
         )
 
     def forward(self, x):
-        return self.shared_layers(x)
+        #x = x.squeeze()
+        return self.shared_layers(x.squeeze())
 
 
 #########################################################

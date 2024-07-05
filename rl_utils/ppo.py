@@ -26,6 +26,31 @@ from rl_utils.buffer import *
 
 import wandb
 
+import matplotlib.pyplot as plt
+
+def plot_grad_flow(named_parameters, file_path='grad_flow.png'):
+    ave_grads = []
+    layers = []
+    for n, p in named_parameters:
+        if p.requires_grad and ("bias" not in n):
+            if p.grad is not None:
+                layers.append(n)
+                ave_grads.append(p.grad.abs().mean().cpu())
+    plt.figure(figsize=(12, 8))  # Increase figure size to accommodate long labels
+    plt.plot(ave_grads, alpha=0.3, color="b")
+    plt.hlines(0, 0, len(ave_grads) + 1, linewidth=1, color="k")
+    plt.xticks(range(0, len(ave_grads)), layers, rotation=90)  # Rotate labels 90 degrees
+    plt.xlim(xmin=0, xmax=len(ave_grads))
+    plt.xlabel("Layers")
+    plt.ylabel("Average Gradient")
+    plt.title("Gradient Flow")
+    plt.grid(True)
+    plt.tight_layout()  # Adjust layout to ensure everything fits
+    plt.savefig(file_path)
+    #plt.close()
+    #plt.show()
+
+
 def make_histos(buffer):
     # actions taken
     x_values = []
@@ -98,6 +123,7 @@ class MimiPPO:
                 do_wandb = False,
                 do_vf_clip = True, 
                 do_lin_lr_decay = True,
+                verbose = True,
             ): #this is not a sad smiley but a very hungry duck
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -153,6 +179,7 @@ class MimiPPO:
         self.do_wandb = do_wandb
         self.do_vf_clip = do_vf_clip
         self.do_lin_lr_decay = do_lin_lr_decay
+        self.verbose = verbose
         
     def train(self):
         # We shall step through the amount of episodes #In each episode we step through the trajectory
@@ -190,6 +217,16 @@ class MimiPPO:
                 for i_epoch in range(self.n_epochs):   
                     data = NpDataset( ( [ele for ele in self.replayBuffer] ))
                     total_loss = 0
+                    total_loss_sum = 0
+                    action_loss_sum = 0
+                    value_loss_sum = 0
+                    entropy_loss_sum = 0
+                    reward_sum = 0
+                    num_batches = 0
+
+                    # for checks 
+                    if self.verbose:
+                        rewards_for_log = []
 
                     if self.device.type == 'cuda':
                        self.model.to(self.device)
@@ -211,6 +248,17 @@ class MimiPPO:
 
                         #evaluate state action:
                         action_probas_prop, value_prop, entropy_prop = self.model.evaluate(pos_t_batched, actions_batched)
+
+                        #action_probas_prop_notSummed = action_probas_prop
+                        #action_probas_old_batched_notSummed = action_probas_old_batched
+                        #action_probas_prop = action_probas_prop.sum(dim=-1)
+                        #action_probas_old_batched = action_probas_old_batched.sum(dim=-1)
+
+                        #print(action_probas_prop_notSummed.shape, action_probas_old_batched_notSummed.shape, action_probas_prop.shape, action_probas_old_batched.shape)
+                        #print(action_probas_prop_notSummed[0], action_probas_old_batched_notSummed[0], action_probas_prop[0], action_probas_old_batched[0])
+                        #print( "eval ", action_probas_prop )
+                        #print( "batch",  action_probas_old_batched )
+
                         ap_ratio = torch.exp( action_probas_prop- action_probas_old_batched )
 
                         if(self.do_a2c): #do unclipped advantage policy loss
@@ -225,12 +273,13 @@ class MimiPPO:
                             #action_loss = (action_loss/ (ap_ratio.mean()) ).mean()
 
                         if self.do_vf_clip:
-                            value_loss =  (value_batched.squeeze() - return_batched.squeeze()).pow(2)
-                            value_clip = value_batched.squeeze() + torch.clamp( value_prop -value_batched, -self.epsilon, self.epsilon)
+                            #print(value_batched.shape, return_batched.shape, value_prop.shape)
+                            value_loss =  (value_batched - return_batched).pow(2)
+                            value_clip = value_batched + torch.clamp( value_prop -value_batched, -self.epsilon, self.epsilon)
                             value_loss_clipped = (value_clip - return_batched ).pow(2)
                             value_loss = torch.max(value_loss, value_loss_clipped).mean()
                         else:
-                            value_loss = F.mse_loss(value_prop.squeeze(), return_batched.squeeze())
+                            value_loss = F.mse_loss(value_prop, return_batched)
 
                         entropy_loss = - entropy_prop.mean()
 
@@ -238,32 +287,90 @@ class MimiPPO:
                         log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() * ( counter / self.max_env_steps )
 
                         # total loss 
-                        total_loss = self.vf_coef * value_loss + action_loss + log_std_penalty_loss #self.ent_coef * entropy_loss +
+                        total_loss = self.vf_coef * value_loss + action_loss + log_std_penalty_loss + self.ent_coef * entropy_loss 
 
                         self.optimizer.zero_grad()
                         total_loss.mean().backward()
+
+                        #plot_grad_flow(self.model.named_parameters())
+                        
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm = self.max_grad_norm )
                         self.optimizer.step()
 
+                        total_loss_sum += total_loss.item()
+                        action_loss_sum += action_loss.detach().cpu().numpy()
+                        value_loss_sum += value_loss.detach().cpu().numpy()
+                        entropy_loss_sum += entropy_loss.detach().cpu().numpy()
+                        reward_sum += reward_batched.mean().cpu().numpy()
+                        num_batches += 1
+                        if self.verbose:
+                            rewards_for_log.extend(reward_batched.cpu().numpy())
+                    #done with one epoch
+
+                    # log last avg epoch results
+
                     if( i_epoch % (self.n_epochs-1)==0 and i_epoch>0): 
-                        self.writer.add_scalar('Loss/train', total_loss.item(), counter)
-                        self.writer.add_scalar('Loss/Policy_grad', action_loss.detach().cpu().numpy(), counter)
-                        self.writer.add_scalar('Loss/Value', value_loss.detach().cpu().numpy(), counter)
-                        self.writer.add_scalar('Loss/Entropy', entropy_loss.detach().cpu().numpy(), counter)
-                        self.writer.add_scalar('Reward/train', reward_batched.mean().cpu().numpy(), counter)
+                        avg_total_loss = total_loss_sum / num_batches
+                        avg_action_loss = action_loss_sum / num_batches
+                        avg_value_loss = value_loss_sum / num_batches
+                        avg_entropy_loss = entropy_loss_sum / num_batches
+                        avg_reward = reward_sum / num_batches
+
+                        self.writer.add_scalar('Loss/train', avg_total_loss, counter)
+                        self.writer.add_scalar('Loss/Policy_grad', avg_action_loss, counter)
+                        self.writer.add_scalar('Loss/Value', avg_value_loss, counter)
+                        self.writer.add_scalar('Loss/Entropy', avg_entropy_loss, counter)
+                        self.writer.add_scalar('Reward/train', avg_reward, counter)
                         self.writer.add_scalar('Param/action_std', self.model.action_std.data[0].cpu(), counter)
-                        print(reward_batched.mean().cpu().numpy())
                         self.writer.add_scalar('Param/learningRate', self.scheduler.optimizer.param_groups[0]['lr'], counter)
+
+                        if self.verbose:
+                            self.writer.add_histogram('Rewards/Distribution', np.array(rewards_for_log), counter)
+                            self.writer.add_histogram('Policy/ap_ratio', ap_ratio, counter)
+                            self.writer.add_histogram('Policy/ap_ratio_clipped ', clipped_ratio, counter)
+                            self.writer.add_histogram('Policy/avd_r_clip', act2, counter)
+                            self.writer.add_histogram('Policy/avd_r', act1, counter)
+                            self.writer.add_histogram('Policy/action_proba_eval', action_probas_prop, counter)
+                            self.writer.add_histogram('Policy/action_proba_batch', action_probas_old_batched, counter)
+                            self.writer.add_histogram('Policy/actions_batched', actions_batched, counter)
+                            self.writer.add_histogram('Policy/value_prop', value_prop, counter)
+                            self.writer.add_histogram('Policy/value_batched', value_batched, counter)
+                            self.writer.add_histogram('Policy/return_batched', return_batched, counter)
+
+                            ave_grads = []
+                            layers = []
+                            for n, p in self.model.named_parameters():
+                                if p.requires_grad and ("bias" not in n):
+                                    if p.grad is not None:
+                                        layers.append(n)
+                                        ave_grads.append(p.grad.abs().mean().cpu().item())
+                                        # Log gradients to TensorBoard as histograms
+                                        self.writer.add_histogram(f'Gradients/{n}', p.grad, counter)
+
+                        print(avg_reward)
 
                         if self.do_wandb:
                             wandb.log({
-                                    'epoch': i_epoch + 1,
-                                    'env_steps': counter ,
-                                    'loss':  total_loss.item(),
-                                    'loss_pg':  action_loss.detach().cpu().numpy(),
-                                    'loss_vf':  value_loss.detach().cpu().numpy(),
-                                    'average_reward': reward_batched.mean().cpu().numpy(),
-                                    'action_std': self.model.action_std.data[0].cpu()
+                                'epoch': i_epoch + 1,
+                                'env_steps': counter,
+                                'loss': avg_total_loss,
+                                'loss_pg': avg_action_loss,
+                                'loss_vf': avg_value_loss,
+                                'average_reward': avg_reward,
+                                'action_std': self.model.action_std.data[0].cpu(),
+                                'Step': counter , 
+                                'Rewards/Distribution': wandb.Histogram(np.array(rewards_for_log)),
+                                'Policy/ap_ratio': wandb.Histogram(ap_ratio.detach().cpu().numpy()),
+                                'Policy/ap_ratio_clipped': wandb.Histogram(clipped_ratio.detach().cpu().numpy()),
+                                'Policy/avd_r_clip': wandb.Histogram(act2.detach().cpu().numpy()),
+                                'Policy/avd_r': wandb.Histogram(act1.detach().cpu().numpy()),
+                                'Policy/action_proba_eval': wandb.Histogram(action_probas_prop.detach().cpu().numpy()),
+                                'Policy/action_proba_batch': wandb.Histogram(action_probas_old_batched.detach().cpu().numpy()),
+                                'Policy/actions_batched': wandb.Histogram(actions_batched.detach().cpu().numpy()),
+                                'Policy/value_prop': wandb.Histogram(value_prop.detach().cpu().numpy()),
+                                'Policy/value_batched': wandb.Histogram(value_batched.detach().cpu().numpy()),
+                                'Policy/return_batched': wandb.Histogram(return_batched.detach().cpu().numpy()),
+
                             })
                     #self.scheduler.step(total_loss)
                 if self.do_lin_lr_decay:
