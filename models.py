@@ -182,7 +182,7 @@ class AE(nn.Module):
 ### Predictor model  ###
 ###############################################################
 class Predictor(nn.Module):
-    def __init__(self, input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=64, n_layers_lstm=1, hidden_size=32):
+    def __init__(self,  input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=64, n_layers_lstm=1, hidden_size=32):
         super(Predictor, self).__init__()
 
         self.lstm_output_size = lstm_output_size
@@ -191,7 +191,7 @@ class Predictor(nn.Module):
         self.n_pred_frames = n_pred_frames
         self.batch_size = batch_size
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.conv_encoder = ImageEncoder(input_channels, output_size).to(self.device)
+        #self.conv_encoder = encoder # ImageEncoder(input_channels, output_size).to(self.device)
         #self.fc = nn.Linear(output_size*3, self.lstm_output_size)  # from embedding to lstm 1 layer
         self.lstm = nn.LSTM(input_size = self.lstm_output_size,
                             hidden_size = self.lstm_output_size, 
@@ -204,7 +204,7 @@ class Predictor(nn.Module):
         ).to(self.device)
 
     def forward(self, x):
-        conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
+        #conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
         #merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) 
 
         h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial hidden state
@@ -214,7 +214,8 @@ class Predictor(nn.Module):
 
         #condition with n conditioning frames
         for i_step in range( self.n_cond_frames):
-            mlp_output = self.mlp_enc(conv_embeddings[i_step]) 
+            #mlp_output = self.mlp_enc(conv_embeddings[i_step]) 
+            mlp_output = self.mlp_enc(x[i_step]) 
             mlp_output = mlp_output.unsqueeze(1) 
             input_t = mlp_output
 

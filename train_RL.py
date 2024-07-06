@@ -11,54 +11,12 @@ import torch
 import wandb
 import time
 
-def make_histos(ppo_trainer):
-    # actions taken
-    x_values = []
-    y_values = []
-
-    #print(repBuf[0][1][0])
-    for item in range(len(ppo_trainer.replayBuffer)):
-        #x, y = ppo_trainer.replayBuffer[item][1][0].tolist()
-        x, y = ppo_trainer.replayBuffer[item][1].tolist()
-        x_values.append(x)
-        y_values.append(y)
-    x_values = np.array(x_values)
-    y_values = np.array(y_values)
-
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(10, 5))
-
-    plt.subplot(1, 2, 1)
-    plt.hist(x_values, bins=100, color='blue', alpha=0.7)
-    plt.title('Histogram of X actions values')
-    plt.xlabel('X')
-    plt.ylabel('Frequency')
-
-    plt.subplot(1, 2, 2)
-    plt.hist(y_values, bins=100, color='green', alpha=0.7)
-    plt.title('Histogram of Y actions values')
-    plt.xlabel('Y')
-    plt.ylabel('Frequency')
-    plt.tight_layout()
-
-    plt.savefig('histograms_actions.png')
-
-
-def load_pretrained_weights(model, pretrained_path):
-    device = torch.device('cpu')
-    model.load_state_dict(torch.load(pretrained_path, map_location=device))
-    return model
+from rl_utils.torch_utils import load_pretrained_weights
 
 #Freeze params with False
 def set_parameter_requires_grad(model, requires_grad=False):
     for param in model.parameters():
         param.requires_grad = requires_grad
-
-#wandb.init(
-#    project="clvr_starter",
-#    config={
-#        "dataset": "sprites",
-#    })
 
 sweep_config = {
     'name': 'cnn_sweep_fixedLPsum',
@@ -140,6 +98,7 @@ def train(args):
     # Get hyperparameters from wandb.config
     if args.do_sweep:
         minibatch_size = wandb.config.batch_size
+
         epsilon = wandb.config.clip_param
         learning_rate = wandb.config.learning_rate
         #final_log_std = wandb.config.final_log_std
@@ -200,7 +159,7 @@ def train(args):
         pretrained_path = "models/repr_encoder_full_model_epoch_499_20240622_063255"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
-        #separate_ac_mlps = False #True
+        separate_ac_mlps = True
         #ent_coef=0.0001 
         set_parameter_requires_grad(encoder, requires_grad=True)
 
@@ -258,7 +217,7 @@ def main(args):
 
     if args.do_sweep:
         def sweep_train():
-            config = wandb.config
+            #config = wandb.config
             #wandb.init(project='clvr_starter', config=config)  # Initialize WandB inside the sweep_train function
             train(args)
 
