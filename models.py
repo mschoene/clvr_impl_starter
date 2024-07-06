@@ -287,13 +287,13 @@ class CNN(nn.Module):
   
         self.conv_layers = nn.Sequential(
             nn.Conv2d(input_channels, 16, kernel_size=kernel_size, stride=stride),
-            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=kernel_size, stride=stride),
-            #nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
+            nn.BatchNorm2d(16),  # Add BatchNorm layer after Conv2d
             nn.ReLU(),
             nn.Flatten(),
         )

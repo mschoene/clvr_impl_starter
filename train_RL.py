@@ -69,13 +69,13 @@ sweep_config = {
     },
     'parameters': {
         'n_actors': {
-            'values': [12, 8, 4]
+            'values': [4]
         },      
         'n_traj': {
-            'values': [8,10, 4] 
+            'values': [10] 
         },
         'batch_size': {
-            'values': [32, 64, 128]
+            'values': [64, 128]
         },
         'clip_param': {
             'values': [0.1, 0.2]
@@ -87,14 +87,16 @@ sweep_config = {
             'values': [ 1, 2 ]
         },        
         'std_coef': {
-            'values': [0.1, 0.01, 0.001, 0.0001, 0.00001]
-        },        
-        'learning_rate': {
-            'values': [0.0001, 0.0003, 0.00001]
+            'values': [10, 5, 1, 0.1 ]
         }
     }
 }
 
+baselines = ['oracle', 'cnn', 'enc', 'enc_ft', 'repr', 'repr_ft']
+distractor_counts = [0, 1, 2, 3]
+
+def generate_run_name(baseline, num_distractors):
+    return f"{baseline}_d_{num_distractors}"
 
 import gym
 
@@ -102,15 +104,20 @@ import gym
 # Initialize the sweep
 #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
 
-def train(wandb_config, wandb_instance, args):
+def train(args):
 
     #config = wandb.config
     #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
     #wandb.init(project='your_project_name', config=wandb_config)
-
-    #config = wandb.config
     if args.do_sweep:
         wandb.init(project='clvr_starter') #, config=wandb_config)
+
+    if args.do_wandb_exp:
+        run_name = generate_run_name(args.model_name.lower() , args.n_distractors)
+        wandb.init(project="clvr_starter", name=run_name, config={
+        "baseline": args.model_name.lower(),
+        "num_distractors": args.n_distractors,
+        })
     
     actions_space_std =  args.action_std_init #0. #-1. #0 #-1. # 0.5
     ent_coef = args.ent_coef
@@ -120,7 +127,7 @@ def train(wandb_config, wandb_instance, args):
     policy_input_dim = 64
     env_name = f'Sprites-v{args.n_distractors}'
     separate_ac_mlps = args.sep_ac #  False
-    ac_hidden_layers = 2
+    ac_hidden_layers = args.n_ac_hl
     ac_hidden_size = 32
     epsilon = args.epsilon
     learning_rate = args.learning_rate # 1e-4
@@ -151,19 +158,18 @@ def train(wandb_config, wandb_instance, args):
         env = gym.make(env_name)
         encoder = Oracle(env.observation_space.shape[0])
         policy_input_dim = 32
+
     elif model_name == 'cnn':
-        #ent_coef = 0.0004 #0.0005
         encoder = CNN()  # --ent_coef 0.0004 --std_coef 0.2 --minibatch_size 128
         ac_hidden_layers = 1 #2# 1
         ac_hidden_size = 64
         #separate_ac_mlps = True # TODO just a test if split works better at all
-        #separate_ac_mlps = True #False
+        separate_ac_mlps = False
 
-        #policy = MimiPPOPolicy(encoder=cnn_encoder, obs_dim=obs_dim, action_space=action_space, action_std_init=action_std_init, encoder_output_size=encoder_output_size)
     elif model_name == 'img':
         encoder = ImageEncoder(1, 64)
         separate_ac_mlps = True
-        ent_coef=0.0005  
+        #ent_coef=0.0005  
 
 
     elif model_name =="enc": #pretrained encoder, frozen
@@ -171,14 +177,14 @@ def train(wandb_config, wandb_instance, args):
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        ent_coef=0.0006 
+        #ent_coef=0.0006 
         set_parameter_requires_grad(encoder, requires_grad=False)
     elif model_name =="enc_ft": #pretrained encoder, fine tuning
         pretrained_path = "models/encoder_model_2obj_20240620_153556_299"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        ent_coef=0.0005
+        #ent_coef=0.0005
         set_parameter_requires_grad(encoder, requires_grad=True)
 
 
@@ -187,7 +193,7 @@ def train(wandb_config, wandb_instance, args):
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        ent_coef=0.0005   
+        #ent_coef=0.0005   
         set_parameter_requires_grad(encoder, requires_grad=False)
 
     elif model_name =="repr_ft": #pretrained representation encoder, fine tuning
@@ -204,7 +210,7 @@ def train(wandb_config, wandb_instance, args):
     env = gym.make(env_name)
     env = ScaledReward(env)
     env.seed(1)
-    torch.manual_seed(1)
+    torch.manual_seed(42)
 
     #model = model_cls(env.observation_space.shape[0], env.action_space.shape[0], actions_space_std)
     model = MimiPPOPolicy(enc=encoder, 
@@ -233,7 +239,7 @@ def train(wandb_config, wandb_instance, args):
                           n_trajectories=n_traj,
                           off_poli_factor=args.off_p_frac,
                           n_actors=n_actors,
-                          do_wandb=args.do_sweep
+                          do_wandb=(args.do_sweep or args.do_wandb_exp)
                           )
 
     #ppo_trainer = MimiPPO( model, env)
@@ -254,17 +260,16 @@ def main(args):
         def sweep_train():
             config = wandb.config
             #wandb.init(project='clvr_starter', config=config)  # Initialize WandB inside the sweep_train function
-            train(wandb, config, args)
+            train(args)
 
-        #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
+        sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
 
         #print(sweep_id)
-        sweep_id = '8vibecax' # 'sh3m6vfo' #'lzeyi0wd' # 'wvekjp8m' #'7nfe067v'
+        #sweep_id = '8vibecax' # 'sh3m6vfo' #'lzeyi0wd' # 'wvekjp8m' #'7nfe067v'
         wandb.agent(sweep_id, function=sweep_train, project="clvr_starter")
         #wandb.agent(sweep_id, function=sweep_train)
     else:
-        config = wandb.config
-        train(wandb, config, args)
+        train(args)
 
 
 
@@ -273,8 +278,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train MimiPPO model with specified parameters.")
     parser.add_argument('--model_name', type=str, required=True, help="Model name to use ('oracle', 'cnn', 'enc', 'enc_ft', 'repr', 'repr_ft').")
 
-    parser.add_argument('--std_coef', type=float, default=0.0001, help="Standard deviation coefficient.")
-    parser.add_argument('--ent_coef', type=float, default=0.001, help="Entropy coefficient.")
+    parser.add_argument('--std_coef', type=float, default=1., help="Standard deviation coefficient.")
+    parser.add_argument('--ent_coef', type=float, default=0.0, help="Entropy coefficient.")
     parser.add_argument('--vf_coef', type=float, default=0.5, help="Value function coefficient.")
 
     parser.add_argument('--minibatch_size', type=int, default=128, help="Minibatch size.")
@@ -284,13 +289,16 @@ if __name__ == "__main__":
     parser.add_argument('--sep_ac', type=int,  default=1, help="0/1  separate policy & value networks")
     parser.add_argument('--action_std_init', type=float, default=0.0, help="Initial log action standard deviation.")
     parser.add_argument('--action_std_final', type=float, default=0.0, help="Initial log action standard deviation.")
-    parser.add_argument('--epsilon', type=float, default=0.1, help="Advantage clipping factor.")
+    parser.add_argument('--epsilon', type=float, default=0.2, help="Advantage clipping factor.")
     parser.add_argument('--n_traj', type=int, default=10, help="Number trajectories to sample.")
     parser.add_argument('--learning_rate', type=float, default=0.0003, help="Learning rate")
     parser.add_argument('--off_p_frac', type=float, default=1.0, help="Fraction of off policy events to keep in replay buffer, >1 means going off policy")
     parser.add_argument('--n_actors', type=int, default=4, help="Number of actors ")
+    
+    parser.add_argument('--n_ac_hl', type=int, default=2, help="Number of hidden layers in MLP AC feature extractor ")
 
     parser.add_argument('--do_sweep', type=bool, default=False, help="Do a HP sweep")
+    parser.add_argument('--do_wandb_exp', type=bool, default=False, help="Do wandb experiment and logging")
 
     args = parser.parse_args()
     #wandb.config.update(args)

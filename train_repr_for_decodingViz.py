@@ -45,6 +45,7 @@ def main(args):
 
     train_type = args.type 
     train_epochs = args.n_epochs
+    n_distractors = args.n_distractors
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -65,7 +66,7 @@ def main(args):
                 max_seq_len=40, #30, #30,
                 max_speed=0.05,      # total image range [0, 1]
                 obj_size=0.2,       # size of objects, full images is 1.0
-                shapes_per_traj=2,      # number of shapes per trajectory
+                shapes_per_traj=2 + n_distractors,      # number of shapes per trajectory
                 rewards=[TargetXReward, TargetYReward, AgentXReward, AgentYReward]
             )
 

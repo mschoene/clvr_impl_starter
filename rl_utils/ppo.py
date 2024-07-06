@@ -28,60 +28,7 @@ import wandb
 
 import matplotlib.pyplot as plt
 
-def plot_grad_flow(named_parameters, file_path='grad_flow.png'):
-    ave_grads = []
-    layers = []
-    for n, p in named_parameters:
-        if p.requires_grad and ("bias" not in n):
-            if p.grad is not None:
-                layers.append(n)
-                ave_grads.append(p.grad.abs().mean().cpu())
-    plt.figure(figsize=(12, 8))  # Increase figure size to accommodate long labels
-    plt.plot(ave_grads, alpha=0.3, color="b")
-    plt.hlines(0, 0, len(ave_grads) + 1, linewidth=1, color="k")
-    plt.xticks(range(0, len(ave_grads)), layers, rotation=90)  # Rotate labels 90 degrees
-    plt.xlim(xmin=0, xmax=len(ave_grads))
-    plt.xlabel("Layers")
-    plt.ylabel("Average Gradient")
-    plt.title("Gradient Flow")
-    plt.grid(True)
-    plt.tight_layout()  # Adjust layout to ensure everything fits
-    plt.savefig(file_path)
-    #plt.close()
-    #plt.show()
 
-
-def make_histos(buffer):
-    # actions taken
-    x_values = []
-    y_values = []
-
-    #print(repBuf[0][1][0])
-    for item in range(len(buffer)):
-        x, y = buffer[item][1][0].tolist()
-        x_values.append(x)
-        y_values.append(y)
-    x_values = np.array(x_values)
-    y_values = np.array(y_values)
-
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(10, 5))
-
-    plt.subplot(1, 2, 1)
-    plt.hist(x_values, bins=100, color='blue', alpha=0.7)
-    plt.title('Histogram of X actions values')
-    plt.xlabel('X')
-    plt.ylabel('Frequency')
-
-    plt.subplot(1, 2, 2)
-    plt.hist(y_values, bins=100, color='green', alpha=0.7)
-    plt.title('Histogram of Y actions values')
-    plt.xlabel('Y')
-    plt.ylabel('Frequency')
-    plt.tight_layout()
-
-    plt.savefig('histograms_actions.png')
-    #plt.close('all')
 
 def update_linear_schedule(optimizer, epoch, total_num_epochs, initial_lr):
     """Decreases the learning rate linearly"""
@@ -292,8 +239,6 @@ class MimiPPO:
                         self.optimizer.zero_grad()
                         total_loss.mean().backward()
 
-                        #plot_grad_flow(self.model.named_parameters())
-                        
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm = self.max_grad_norm )
                         self.optimizer.step()
 
@@ -308,7 +253,6 @@ class MimiPPO:
                     #done with one epoch
 
                     # log last avg epoch results
-
                     if( i_epoch % (self.n_epochs-1)==0 and i_epoch>0): 
                         avg_total_loss = total_loss_sum / num_batches
                         avg_action_loss = action_loss_sum / num_batches
@@ -359,26 +303,23 @@ class MimiPPO:
                                 'average_reward': avg_reward,
                                 'action_std': self.model.action_std.data[0].cpu(),
                                 'Step': counter , 
-                                'Rewards/Distribution': wandb.Histogram(np.array(rewards_for_log)),
-                                'Policy/ap_ratio': wandb.Histogram(ap_ratio.detach().cpu().numpy()),
-                                'Policy/ap_ratio_clipped': wandb.Histogram(clipped_ratio.detach().cpu().numpy()),
-                                'Policy/avd_r_clip': wandb.Histogram(act2.detach().cpu().numpy()),
-                                'Policy/avd_r': wandb.Histogram(act1.detach().cpu().numpy()),
-                                'Policy/action_proba_eval': wandb.Histogram(action_probas_prop.detach().cpu().numpy()),
-                                'Policy/action_proba_batch': wandb.Histogram(action_probas_old_batched.detach().cpu().numpy()),
-                                'Policy/actions_batched': wandb.Histogram(actions_batched.detach().cpu().numpy()),
-                                'Policy/value_prop': wandb.Histogram(value_prop.detach().cpu().numpy()),
-                                'Policy/value_batched': wandb.Histogram(value_batched.detach().cpu().numpy()),
-                                'Policy/return_batched': wandb.Histogram(return_batched.detach().cpu().numpy()),
+
+                                #'Rewards/Distribution': wandb.Histogram(np.array(rewards_for_log)),
+                                #'Policy/ap_ratio': wandb.Histogram(ap_ratio.detach().cpu().numpy()),
+                                #'Policy/ap_ratio_clipped': wandb.Histogram(clipped_ratio.detach().cpu().numpy()),
+                                #'Policy/avd_r_clip': wandb.Histogram(act2.detach().cpu().numpy()),
+                                #'Policy/avd_r': wandb.Histogram(act1.detach().cpu().numpy()),
+                                #'Policy/action_proba_eval': wandb.Histogram(action_probas_prop.detach().cpu().numpy()),
+                                #'Policy/action_proba_batch': wandb.Histogram(action_probas_old_batched.detach().cpu().numpy()),
+                                #'Policy/actions_batched': wandb.Histogram(actions_batched.detach().cpu().numpy()),
+                                #'Policy/value_prop': wandb.Histogram(value_prop.detach().cpu().numpy()),
+                                #'Policy/value_batched': wandb.Histogram(value_batched.detach().cpu().numpy()),
+                                #'Policy/return_batched': wandb.Histogram(return_batched.detach().cpu().numpy()),
 
                             })
                     #self.scheduler.step(total_loss)
                 if self.do_lin_lr_decay:
                     update_linear_schedule(self.optimizer, counter, self.max_env_steps, self.lr)
-
-            #make_histos(self.replayBuffer)
-            #print(self.model.action_std.data)
-
 
         #if (counter > self.max_env_steps):
         print("DONE " , self.max_env_steps , " steps")

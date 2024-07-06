@@ -21,6 +21,49 @@ class ScaledReward(gym.RewardWrapper):
         scaled_reward = 2 * (reward - 0.65) / (1- 0.65)
         return scaled_reward
 
+
+
+class RunningMeanStd:
+    def __init__(self, epsilon=1e-4, shape=()):
+        self.mean = np.zeros(shape, 'float64')
+        self.var = np.ones(shape, 'float64')
+        self.count = epsilon
+
+    def update(self, x):
+        batch_mean = np.mean(x, axis=0)
+        batch_var = np.var(x, axis=0)
+        batch_count = x.shape[0]
+        
+        self.update_from_moments(batch_mean, batch_var, batch_count)
+        
+    def update_from_moments(self, batch_mean, batch_var, batch_count):
+        delta = batch_mean - self.mean
+        total_count = self.count + batch_count
+        
+        new_mean = self.mean + delta * batch_count / total_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + np.square(delta) * self.count * batch_count / total_count
+        new_var = M2 / total_count
+        
+        self.mean = new_mean
+        self.var = new_var
+        self.count = total_count
+
+    @property
+    def std(self):
+        return np.sqrt(self.var)
+
+running_mean_std = RunningMeanStd(shape=())
+
+def normalize_rewards_with_running_stats(rewards):
+    rewards = np.array(rewards)
+    running_mean_std.update(rewards)
+    normalized_rewards = (rewards - running_mean_std.mean) / (running_mean_std.std + 1e-8)
+    return normalized_rewards.tolist()
+
+
+
 EpisodeStep = namedtuple('EpisodeStep', ['state', 'action', 'action_probas', 'reward', 'done', 'value', 'ret', 'advantage'])
 
 
@@ -94,13 +137,18 @@ def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, 
 
 
 def calc_discd_vals(episode, gamma, lambda_val):
+
+    rewards = [step.reward for step in episode]
+    normalized_rewards = normalize_rewards_with_running_stats(rewards)
+    
     # Initialize tensors
     advantages = torch.zeros(len(episode), dtype=torch.float32)
     returns = torch.zeros(len(episode), dtype=torch.float32)
     last_adv = 0.0
 
     for t in reversed(range(len(episode))):
-        reward = episode[t].reward
+        reward = normalized_rewards[t]
+        #reward = episode[t].reward #TODO check if this works properly 
         value = episode[t].value
         if t < len(episode) - 1:
             next_value = episode[t + 1].value
@@ -116,6 +164,7 @@ def calc_discd_vals(episode, gamma, lambda_val):
     updated_episode = []
     for i in range(len(episode)):
         updated_step = episode[i]._replace(advantage=advantages[i], ret=returns[i])
+        #updated_step = episode[i]._replace(advantage=advantages[i], ret=returns[i], reward=normalized_rewards[i])
         updated_episode.append(updated_step)
 
     return updated_episode
