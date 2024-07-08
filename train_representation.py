@@ -133,9 +133,9 @@ def main(args):
     #optimizer_repr = optim.RAdam( list(predictor.parameters()) + list(reward_predictor.parameters()), betas = (0.9, 0.999))
     optimizer_deco = optim.RAdam( decoder.parameters(), betas = (0.9, 0.999))
 
-    if do_pretrained_enc:   #ie fixed encoder from AE
+    if do_pretrained_enc:   # ie fixed encoder from AE
         optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()), betas=(0.9, 0.999))
-    else:                   #ie we train the encoder params
+    else:                   # ie we train the encoder params
         optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()) + list(encoder.parameters()), betas=(0.9, 0.999))
 
     predictor.to(device)
@@ -219,15 +219,8 @@ def main(args):
                     optimizer_repr.step()
 
                 enc_img_tensor = torch.stack(enc_img, dim=1)  # Shape will be (batch_size, sequence_length, encoded_dim)
-                #enc_img_tensor = torch.stack(enc_img, dim=0) # TODO revert to dim 1? # Shape will be (sequence_length, batch_size, encoded_dim)
-                #print(enc_img[0].shape, enc_img_tensor.shape )
-
-                #enc_img_tensor = enc_img_tensor.detach()
                 enc_img_tensor = enc_img_tensor.clone().detach().requires_grad_(False)
-                #enc_img_tensor = enc_img_tensor.view(-1, enc_img_tensor.shape[-1])
                 enc_img_tensor = enc_img_tensor.reshape(-1, *enc_img_tensor.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)         
-
-                #print(enc_img_tensor.shape)
                 dec_img = decoder(enc_img_tensor)
                 in_img_truth = label_img.reshape(-1, *label_img.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)         
 
@@ -269,7 +262,7 @@ def main(args):
             running_loss += loss.item()  
 
                            
-        if (epoch_index%100==0 and epoch_index >0):
+        if (epoch_index%50==0 and epoch_index >0):
             vin_img_truth_1seq= label_img[0, :n_conditioning_frames, ...] #.squeeze(1)
             display = list(dec_img[ 0:n_conditioning_frames, ...]) + list(vin_img_truth_1seq)
             display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames)
@@ -283,12 +276,14 @@ def main(args):
             else:
                 writer.add_scalars('Validation Loss/Heads', loss_dict, epoch_index + 1)
 
-        for i, gradient_info in enumerate(all_gradients):
-            for model_name, grads in gradient_info.items():
-                for layer_name, grad_stats in grads.items():
-                    writer.add_scalar(f'gradients/{model_name}/{layer_name}/mean', grad_stats['mean'], epoch_index * len(i_dataloader) + i)
-                    writer.add_scalar(f'gradients/{model_name}/{layer_name}/std', grad_stats['std'], epoch_index * len(i_dataloader) + i)
-                    writer.add_scalar(f'gradients/{model_name}/{layer_name}/max', grad_stats['max'], epoch_index * len(i_dataloader) + i)
+            if (epoch_index%50==0 and epoch_index >0):
+                if doTrain:
+                    print(f"Epoch {epoch_index + 1} Training Head Losses:")
+                else:
+                    print(f"Epoch {epoch_index + 1} Validation Head Losses:")
+
+                for head_idx, avg_loss in enumerate(avg_head_losses):
+                    print(f"  Head {head_idx}: {avg_loss:.4f}")
 
         return running_loss / len(i_dataloader), running_loss_dec / len(i_dataloader)
 
@@ -298,7 +293,6 @@ def main(args):
 
         for epoch_number in range(EPOCHS):
             print('EPOCH {}:'.format(epoch_number + 1))
-
 
             # Make sure gradient tracking is on, and do a pass over the data
             predictor.train()
