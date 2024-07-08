@@ -82,28 +82,19 @@ def main(args):
     #img = make_image_seq_strip([traj.images[None, :, None].repeat(3, axis=2).astype(np.float32)], sep_val=255.0).astype(np.uint8)
     #cv2.imwrite("test.png", img[0].transpose(1, 2, 0))
 
-    n_conditioning_frames = 3 #10 #3
-    n_prediction_frames = 25 
-    batch_size = 128 #64
-    n_batches = 100
+    n_conditioning_frames = 25 #10 #3 #10 #3
+    n_prediction_frames = spec['max_seq_len'] - n_conditioning_frames #25 
+    batch_size = 32 #128 # 64 #128 #64
+    n_batches = 20 #100
     n_samples = batch_size*n_batches
 
     input_channels = 1 # 3 but we change it to grey scale first
     #this is the size of the input image and also the size of the latent space
     output_size = spec['resolution']  #64
 
-
     n_heads = 1
-    train_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples)
-    valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=batch_size*4)
     if(train_type =="full"):
-        train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
-        valid_ds = MovingSpriteDataset(spec=spec, num_samples=batch_size*4)
         n_heads = 4
-
-
-    dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=2)
-    dataloader_valid = DataLoader(valid_ds, batch_size=batch_size, num_workers=2)
     #dataloader = DataLoader(overfitting_image, 1)
 
     # use 
@@ -125,7 +116,7 @@ def main(args):
     #model = autoencoder
     #    def __init__(self, input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=32, n_layers_lstm=1, hidden_size=32):
 
-    predictor = Predictor( input_channels, output_size, batch_size)
+    predictor = Predictor( input_channels, output_size, batch_size , n_cond_frames=n_conditioning_frames, n_pred_frames=n_prediction_frames)
     reward_predictor = RewardPredictor(n_pred_frames=n_prediction_frames, n_heads=n_heads, lstm_output_size=64)
     #reward_predictor = RewardPredictor(n_pred_frames=25, n_heads=1, lstm_output_size=64)
 
@@ -158,16 +149,20 @@ def main(args):
     trafo = v2.Compose([v2.Grayscale(num_output_channels=1) ])
 
 
-    def train_one_epoch(epoch_index, tb_writer):
+    def train_one_epoch(epoch_index, tb_writer, train_dataloader):
         running_loss = 0.
         last_loss = 0.
         loss_dec = 0.
 
         #counter = 0
-        for i_batch, sample_batched in enumerate(dataloader):
-            inputs_pre = sample_batched.images[:, :n_conditioning_frames, ...] #take only first n images as inputs (tech not even nec since model anyway only uses 3) #TODO make more general
+        for i_batch, sample_batched in enumerate(train_dataloader):
+            #inputs_pre = sample_batched.images[:, :n_conditioning_frames, ...] #take only first n images as inputs (tech not even nec since model anyway only uses 3) #TODO make more general
+            inputs_pre = sample_batched.images #take only first n images as inputs (tech not even nec since model anyway only uses 3) #TODO make more general
             #labels for image decoding
-            label_img = sample_batched.images[:, :n_conditioning_frames, ...]
+            #label_img = sample_batched.images[:, :n_conditioning_frames, ...]
+            label_img = sample_batched.images[:, n_conditioning_frames:n_conditioning_frames + n_prediction_frames, ...]
+
+
             #labels for rewards
             #labels = sample_batched.rewards['target_x']
             #labels = sample_batched.rewards['vertical_position']
@@ -183,7 +178,7 @@ def main(args):
             label_img = torch.stack([torch.unsqueeze(trafo(img), dim=1) for img in label_img], dim=1).transpose(1,0).squeeze(2)
             #limit the labels to the prediction frames only
             labels = labels[:, n_conditioning_frames:n_conditioning_frames + n_prediction_frames]
-
+            #print(labels.shape)
             #reshaped_tensor = tensor.view(nb * nf, nc)
 
             inputs = inputs_pre.clone().detach().requires_grad_(True)
@@ -193,16 +188,19 @@ def main(args):
             label_img = label_img.to(device)
 
             #print(inputs.shape, labels.shape)
-            # zero the parameter gradients
-            optimizer_deco.zero_grad()
-            optimizer_repr.zero_grad()
+
 
 
             enc_img =  [encoder(x_timestep.squeeze(1)) for x_timestep in inputs.split(1, dim=1)]
             predictions = predictor(enc_img)
+            #print(predictions.shape)
             #predictions = predictor(inputs)
             output_rewards = reward_predictor(predictions)
-            loss = loss_fn_repr(output_rewards, labels)
+            loss = loss_fn_repr(output_rewards, labels )
+            #loss = loss_fn_repr(output_rewards[:, 0:-2, ...], labels[:, 1:-1, ...])
+
+            # zero the parameter gradients
+            optimizer_repr.zero_grad()
             loss.backward()
             # Adjust learning weights
             optimizer_repr.step()
@@ -214,22 +212,31 @@ def main(args):
             #print(predictions.shape, in_img.shape)
 
             #in_img = inputs[:, 0, ...] #.squeeze(1)
-            in_img_truth = label_img[:, 0, ...] #.squeeze(1) #n_conditioning_frames:n_conditioning_frames + n_prediction_frames
+            ###in_img_truth = label_img[:, 0, ...] #.squeeze(1) #n_conditioning_frames:n_conditioning_frames + n_prediction_frames
             #in_img_truth = label_img[:, n_conditioning_frames:n_conditioning_frames + n_prediction_frames, ...] #.squeeze(1) #
 
             #enc_img = encoder(in_img)  
-            enc_img_tensor = torch.stack(enc_img, dim=1)  # Shape will be (batch_size, sequence_length, encoded_dim)
+            ###enc_img_tensor = torch.stack(enc_img, dim=1)  # Shape will be (batch_size, sequence_length, encoded_dim)
             #print(enc_img_tensor.shape)
             #in_img.detach()
-            enc_img_tensor = enc_img_tensor.detach()
-            in_img_truth = in_img_truth.detach()
+            ###enc_img_tensor = enc_img_tensor.detach()
+            ###in_img_truth = in_img_truth.detach()
 
             #print(predictions.shape, enc_img.shape)
-            dec_img = decoder(enc_img_tensor[:, 0, ...])
+            ###dec_img = decoder(enc_img_tensor[:, 0, ...])
             #print(in_img_truth.shape, in_img.shape)
 
             #dec_img = decoder(in_img)
+
+
+            predictions_reshaped = predictions.view(-1, predictions.shape[-1])  # Shape: (batch_size * sequence_length, prediction_dim)
+            in_img_truth = label_img.reshape(-1, *label_img.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)            print(predictions_reshaped.shape,in_img_truth.shape )
+            predictions_reshaped = predictions_reshaped.detach()
+            dec_img = decoder(predictions_reshaped)
+
             loss_dec = loss_fn_decoder(dec_img, in_img_truth)
+            
+            optimizer_deco.zero_grad()
             loss_dec.backward()
 
 
@@ -237,14 +244,14 @@ def main(args):
             #loss_dec += loss_i
             #loss_dec.backward()
             optimizer_deco.step()
-            optimizer_deco.zero_grad()
+            #optimizer_deco.zero_grad()
 
             # Gather data and report
             running_loss += loss.item()  #+ loss_dec.item()
             if i_batch % n_batches == (n_batches -1):
                 print('Last loss of lstm {} and decoder {}'.format( loss.item(), loss_dec.item() ))
                 last_loss = running_loss / float(n_batches) # loss per batch
-                tb_x = epoch_index * len(dataloader) + i_batch + 1
+                tb_x = epoch_index * len(train_dataloader) + i_batch + 1
                 tb_writer.add_scalar('Loss/train', last_loss, tb_x)
                 running_loss = 0.
 
@@ -256,6 +263,16 @@ def main(args):
         for epoch_number in range(EPOCHS):
             print('EPOCH {}:'.format(epoch_number + 1))
 
+            #get fresh data each epoch
+            train_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples)
+            valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=batch_size*4)
+            if(train_type =="full"):
+                train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
+                valid_ds = MovingSpriteDataset(spec=spec, num_samples=batch_size*4)
+
+            dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=2)
+            dataloader_valid = DataLoader(valid_ds, batch_size=batch_size, num_workers=2)
+
             # Make sure gradient tracking is on, and do a pass over the data
                    
             predictor.train()
@@ -264,7 +281,7 @@ def main(args):
             if not do_pretrained_enc:
                 encoder.train()
 
-            avg_loss = train_one_epoch(epoch_number, writer)
+            avg_loss = train_one_epoch(epoch_number, writer, dataloader)
 
             running_vloss = 0.0
             # Set the model to evaluation mode, disabling dropout and using population
@@ -274,7 +291,9 @@ def main(args):
             decoder.eval()
             encoder.eval()
 
-            counter = 0
+            counter = 0 #counts validation batches
+            total_head_losses = [0.0] * n_heads  # Initialize total loss for each head
+
             # Disable gradient computation and reduce memory consumption.
             with torch.no_grad():
                 for i, vdata in enumerate(dataloader_valid): #validation_loader):
@@ -282,7 +301,8 @@ def main(args):
                     # vinputs, vlabels = vdata.images[:, 0, ...].squeeze(1), vdata.images[:, 0, ...].squeeze(1)
 
                     vinputs = vdata.images #[:, :n_conditioning_frames, ...] #take only first n images as inputs (tech not nec since model anyway only uses 3) #TODO make more general
-                    vlabel_img = vdata.images #[:, :n_conditioning_frames, ...]
+                    ###vlabel_img = vdata.images #[:, :n_conditioning_frames, ...]
+                    vlabel_img = vdata.images[:, n_conditioning_frames:n_conditioning_frames + n_prediction_frames, ...]
 
                     if train_type =="horiz":
                         vlabels = vdata.rewards['horizontal_position']
@@ -305,51 +325,70 @@ def main(args):
                     #vpredictions = predictor(vinputs)
                     voutputs = reward_predictor(vpredictions)
 
-                    for head_idx in range(voutputs.shape[2]):  # outputs.shape[2] is the number of heads
-                        # Extract the outputs for the current head
-                        head_output = voutputs[:, :, head_idx]  # Shape: (batch_size, n_frames, ...)
+                    if n_heads>1:
+                        for head_idx in range(voutputs.shape[2]):  # outputs.shape[2] is the number of heads
+                            # Extract the outputs for the current head
+                            head_output = voutputs[:, :, head_idx]  # Shape: (batch_size, n_frames, ...)
 
-                        # Compute the loss for the current head
-                        loss_head = loss_fn_decoder(head_output, vlabels[:, :, head_idx])
+                            # Compute the loss for the current head
+                            loss_head = loss_fn_decoder(head_output, vlabels[:, :, head_idx])
 
-                        # Append the loss to the list
-                        #head_losses.append(loss_head.item())
+                            # Append the loss to the list
+                            #head_losses.append(loss_head.item())
+                            # Accumulate the loss for the current head
+                            total_head_losses[head_idx] += loss_head.item()
 
-                        # Print the loss for the current head
-                        print(f"Loss for head {head_idx}: {loss_head.item()}")
-                        writer.add_scalar(f'Loss/Head_{head_idx}', loss_head.item(), counter)
 
+                            # Print the loss for the current head
+                            #print(f"Loss for head {head_idx}: {loss_head.item()}")
+                            #writer.add_scalar(f'Loss/Head_{head_idx}', loss_head.item(), epoch_number+1)
+
+                    #vloss = loss_fn_repr(voutputs, vlabels)
                     vloss = loss_fn_repr(voutputs, vlabels)
                     #avg_head_loss = sum(head_losses) / len(head_losses)
-                    print(f"Average loss across all heads: {vloss}")
+                    #print(f"Average loss across all heads: {vloss}")
                     vloss_dec = 0.
 
                     #vin_img = vinputs[:, 0, ...] #.squeeze(1)
-                    vin_img_truth = vlabel_img[:, 0, ...] #.squeeze(1)
+                    #vin_img_truth = vlabel_img[:, 0, ...] #.squeeze(1)
 
                     #venc_img = encoder(vin_img)
                     #vin_img.detach()
-                    venc_img_tensor = torch.stack(venc_img, dim=1)  # Shape will be (batch_size, sequence_length, encoded_dim)
-                    venc_img_tensor = venc_img_tensor.detach()
+                    ##venc_img_tensor = torch.stack(venc_img, dim=1)  # Shape will be (batch_size, sequence_length, encoded_dim)
+                    ##venc_img_tensor = venc_img_tensor.detach()
                     #venc_img.detach()
-                    vin_img_truth = vin_img_truth.detach()
-                    vdec_img = decoder(venc_img_tensor[:, 0, ...])
+                    ###vin_img_truth = vin_img_truth.detach()
+                    ###vdec_img = decoder(venc_img_tensor[:, 0, ...])
+
+
+                    predictions_reshaped = vpredictions.view(-1, vpredictions.shape[-1])  # Shape: (batch_size * sequence_length, prediction_dim)
+                    vin_img_truth = vlabel_img.reshape(-1, *vlabel_img.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)            print(predictions_reshaped.shape,in_img_truth.shape )
+                    predictions_reshaped = predictions_reshaped.detach()
+                    vdec_img = decoder(predictions_reshaped)
+
                     vloss_i = loss_fn_decoder(vdec_img, vin_img_truth)
                     vloss_dec += vloss_i
 
                     running_vloss += vloss #+ vloss_dec
 
-                if (epoch_number%100==0 and epoch_number >0) or epoch_number==EPOCHS-1:
+                if (epoch_number%10==0 and epoch_number >0) or epoch_number==EPOCHS-1:
                     #every eval decode one sequence for display          
+                    #pred_1seq = vpredictions[0:n_prediction_frames, ...] #get 1 item in batch of predicitons (ie output of pred is shorter by conditioning frames)
                     pred_1seq = vpredictions[0, ...] #get 1 item in batch of predicitons (ie output of pred is shorter by conditioning frames)
                     vin_img_truth_1seq= vlabel_img[0, n_conditioning_frames:n_prediction_frames+n_conditioning_frames, ...] #.squeeze(1)
-
+                    print(pred_1seq.shape, vin_img_truth_1seq.shape )
                     vdec_img = decoder(pred_1seq)
-                    display = list(vdec_img) + list(vin_img_truth_1seq)
-                    display = torchvision.utils.make_grid(display,nrow=25)
-                    torchvision.utils.save_image(display, "models/ae_reward_comp_{}_nDistr_{}_doPre_{}_epoch_{}_{}.png".format(train_type, n_distractors,do_pretrained_enc,  epoch_number, timestamp) )
+                    print(vdec_img.shape)
+                    display = list(vdec_img[0:n_prediction_frames, ...]) + list(vin_img_truth_1seq)
+                    display = torchvision.utils.make_grid(display,nrow=n_prediction_frames)
+                    torchvision.utils.save_image(display, "models/ae_r_comp_{}_nDistr_{}_doPre_{}_epoch_{}_{}.png".format(train_type, n_distractors,do_pretrained_enc,  epoch_number, timestamp) )
 
-    
+            # add loss per head to summary
+            if n_heads>1:
+                avg_head_losses = [total_loss / counter for total_loss in total_head_losses]
+                loss_dict = {f'Loss/Head_{head_idx}': avg_loss for head_idx, avg_loss in enumerate(avg_head_losses)}
+                writer.add_scalars('Validation Loss/Heads', loss_dict, epoch_number + 1)
+
             avg_vloss = running_vloss /counter # (i + 1.)
             print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
@@ -358,6 +397,8 @@ def main(args):
             writer.add_scalars('Training vs. Validation Loss',
                             { 'Training' : avg_loss, 'Validation' : avg_vloss },
                             epoch_number + 1)
+            
+
             writer.flush()
 
             # Track best performance, and save the model's state

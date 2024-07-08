@@ -140,7 +140,7 @@ def train_one_epoch(epoch_index, tb_writer):
         dec_img = decoder(enc_img)
         loss_i = loss_fn_decoder(dec_img, in_img_truth)
         loss_ae  += loss_i
-        loss_ae .backward()
+        loss_ae.backward()
         optimizer_ae.step()
         optimizer_ae.zero_grad()
 
@@ -237,7 +237,7 @@ def do_epochs(EPOCHS=1000):
 
         epoch_number += 1
 
-do_epochs(300)
+do_epochs(150)
 
 
 

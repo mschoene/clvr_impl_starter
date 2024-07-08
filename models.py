@@ -7,13 +7,17 @@ from torch.distributions import MultivariateNormal
 # helper function to init weights orthogonally / kaiming
 ###############################################################
 def init_weights(m):
-   if isinstance(m, nn.Linear):
-       torch.nn.init.orthogonal_(m.weight)
-       m.bias.data.fill_(0.01)
-   elif isinstance(m, nn.Conv2d):
-       torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-       if m.bias is not None:
-           m.bias.data.fill_(0.01)
+    if isinstance(m, nn.Linear):
+        torch.nn.init.orthogonal_(m.weight)
+        m.bias.data.fill_(0.01)
+    elif isinstance(m, nn.Conv2d):
+        torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        if m.bias is not None:
+            m.bias.data.fill_(0.01)
+    elif isinstance(m, nn.LSTM):
+        for name, param in m.named_parameters():
+            if 'weight' in name:
+                nn.init.orthogonal_(param)
 #
 #def init_weights(m):
 #    if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
@@ -73,27 +77,49 @@ class ImageEncoder(nn.Module):
         self.output_size = output_size
         self.dropout_prob = 0.15
         self.conv_layers = self._create_conf_layers()
+        self.conv_layers.apply(init_weights)
 
     def _create_conf_layers(self):
         layers = []
         in_channels = self.input_channels
         out_channels = 4
         for _ in range(int(math.log2(self.output_size))):
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(out_channels))  
             layers.append(nn.ReLU())
-            layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
             in_channels = out_channels
             out_channels *= 2
-        out_channels /= 2
+        out_channels //= 2
         out_channels = int(out_channels)
         # Additional convolutional layer to reduce height and width to 1x1
         layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
         layers.append(nn.BatchNorm2d(out_channels))  
         layers.append(nn.ReLU())
         layers.append(nn.Flatten())
-        layers.append(nn.Linear(128, 64))
+        layers.append(nn.Linear(out_channels * (self.output_size // (2 ** int(math.log2(self.output_size)))) ** 2, 64))
         return nn.Sequential(*layers)
+    
+
+    #def _create_conf_layers(self):
+    #    layers = []
+    #    in_channels = self.input_channels
+    #    out_channels = 4
+    #    for _ in range(int(math.log2(self.output_size))):
+    #        layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
+    #        #layers.append(nn.BatchNorm2d(out_channels))  
+    #        layers.append(nn.ReLU())
+    #        layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+    #        in_channels = out_channels
+    #        out_channels *= 2
+    #    out_channels /= 2
+    #    out_channels = int(out_channels)
+    #    # Additional convolutional layer to reduce height and width to 1x1
+    #    layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
+    #    #layers.append(nn.BatchNorm2d(out_channels))  
+    #    layers.append(nn.ReLU())
+    #    layers.append(nn.Flatten())
+    #    layers.append(nn.Linear(128, 64))
+    #    return nn.Sequential(*layers)
 
     def forward(self, x):
         if x.dim() == 3: #taking care of unbatched case
@@ -131,6 +157,9 @@ class ImageDecoder(nn.Module):
             nn.ConvTranspose2d(4, 1, kernel_size=3, stride=2, padding=1, output_padding=1),  # Output size: [-1, 3, 64, 64]
             nn.Tanh()  # activation
         )
+
+        self.conv_layers.apply(init_weights)
+
     def forward(self, x):
         for layer in self.conv_layers:
             x = layer(x)
@@ -202,6 +231,9 @@ class Predictor(nn.Module):
             MLP3(output_size , output_size = self.lstm_output_size),
             #MLP3(output_size * n_cond_frames, output_size = self.lstm_output_size),
         ).to(self.device)
+        
+        self.lstm.apply(init_weights)
+        self.mlp_enc.apply(init_weights)
 
     def forward(self, x):
         #conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
@@ -212,22 +244,38 @@ class Predictor(nn.Module):
 
         outputs_list = []
 
-        #condition with n conditioning frames
+        ###condition with n conditioning frames
         for i_step in range( self.n_cond_frames):
             #mlp_output = self.mlp_enc(conv_embeddings[i_step]) 
             mlp_output = self.mlp_enc(x[i_step]) 
             mlp_output = mlp_output.unsqueeze(1) 
             input_t = mlp_output
-
+        
             lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
             #outputs_list.append(h0[-1].unsqueeze(1))
             #input_t = lstm_outstep
-
+        
         #then just roll
         for i_step in range(self.n_pred_frames):
             lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
             outputs_list.append(h0[-1].unsqueeze(1))
             input_t = lstm_outstep
+
+        ## Loop through the total number of steps
+        #total_steps = self.n_cond_frames + self.n_pred_frames
+        #for i_step in range(total_steps):
+        #    mlp_output = self.mlp_enc(x[i_step])
+        #    mlp_output = mlp_output.unsqueeze(1)
+        #    input_t = mlp_output
+        #
+        #    lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
+        #             #
+        #    # Append the LSTM output after the conditioning phase
+        #    #if i_step >= self.n_cond_frames:
+        #    outputs_list.append(lstm_outstep)
+
+        # Concatenate outputs along the sequence dimension
+        #outputs = torch.cat(outputs_list, dim=1)  # Shape: (batch_size, sequence_length, lstm_hidden_dim)
 
         # Concatenate predicted outputs along the sequence dimension = [nb, >ns<]
         outputs = torch.stack(outputs_list, dim=1).squeeze(2)
@@ -243,7 +291,6 @@ class RewardPredictor(nn.Module):
         self.n_pred_frames = n_pred_frames
         self.n_heads = n_heads
         self.heads = nn.ModuleList([nn.Sequential(MLP3(lstm_output_size, output_size=1), nn.Sigmoid()) for _ in range(self.n_heads)  ])
-
 
     def forward(self, x):
         batch_size, n_frames, *other_dims = x.size()
@@ -412,7 +459,7 @@ class MimiPPOPolicy(nn.Module):
         #print("eval log prob        ", action_log_probs)
         dist_entropy = dist.entropy().sum(dim=-1)
         #print("eval ", value.shape)
-        #print( "in eval <<<<<<<<<<<<<<<<<<<<< ", action.shape, action_log_probs.shape, value.shape)
+        print( "in eval <<<<<<<<<<<<<<<<<<<<< ", action.shape, action_log_probs.shape, value.shape)
         return action_log_probs, value.squeeze(), dist_entropy 
 
 
