@@ -190,9 +190,10 @@ def main(args):
                 #limit the labels to the prediction frames only
                 labels_reward = labels[:, n_conditioning_frames:n_conditioning_frames + n_prediction_frames]
                 inputs = inputs.clone().detach().requires_grad_(True)
+
                 #send them to the device
                 inputs = inputs.to(device)
-                labels = labels.to(device)
+                labels_reward = labels_reward.to(device)
                 label_img = label_img.to(device)
 
 
