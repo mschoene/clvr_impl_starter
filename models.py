@@ -374,24 +374,22 @@ class CNN(nn.Module):
 ### Policy maker: given an encoder make it into a MimiPPOP  ###
 ###############################################################
 class MimiPPOPolicy(nn.Module):
-    def __init__(self, enc, obs_dim, action_space, action_std_init, encoder_output_size= 64, separate_layers=0, hidden_layer_dim = 32, num_hidden_layers=2):
+    def __init__(self, enc, obs_dim, action_space, action_std_init, encoder_output_size= 64, separate_layers=0, hidden_layer_dim = 32, num_hidden_layers=2, gradStd=True):
         super(MimiPPOPolicy, self).__init__()
 
         self.encoder = enc
         self.encoder_output_size = encoder_output_size
-        #self.input_size = obs_dim
         self.action_dim = action_space
         self.separate_layers = separate_layers
         self.hidden_layer_dim = hidden_layer_dim
         self.num_hidden_layers = num_hidden_layers
         #self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=False ) #True)
-        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
+        #self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
+        self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=gradStd)
 
         self.shared_layers = MLP(self.encoder_output_size , output_dim = self.hidden_layer_dim, hidden_size=self.hidden_layer_dim, num_layers=self.num_hidden_layers , do_final_activ= True)
         self.critic_layers = nn.Sequential( nn.Linear(self.hidden_layer_dim, 1) )
         self.actor_layers = nn.Sequential( nn.Linear(self.hidden_layer_dim, self.action_dim), nn.Tanh())
-        #self.critic_layers = nn.Sequential( nn.Linear(self.encoder_output_size , 1) )
-        #self.actor_layers = nn.Sequential( nn.Linear(self.encoder_output_size, self.action_dim), nn.Tanh())
         if separate_layers:
             self.actor_layers = nn.Sequential(MLP(self.encoder_output_size , self.action_dim, self.hidden_layer_dim, self.num_hidden_layers ),  nn.Tanh())
             self.critic_layers = nn.Sequential(MLP(self.encoder_output_size , 1, self.hidden_layer_dim, self.num_hidden_layers ))
@@ -401,22 +399,13 @@ class MimiPPOPolicy(nn.Module):
         self.critic_layers.apply(init_weights)
 
     def forward(self, x):
-        #print("                                              forward x shape1 ", x.shape )
-
         x = self.encoder(x)
-        #print("                                                 forward x shape2 ", x.shape )
-
-        #print("encoded image ", x)
-        #assert x.shape == self.encoder_output_size, print(x.shape )
-        if not self.separate_layers:
+        if not self.separate_layers: #if joint layers do them
             x = self.shared_layers(x)
-
-        #print("                                                      forward x shape3 ", x.shape )
         value = self.critic_layers(x)
         actor_output = self.actor_layers(x)
-        #print("actor output shape ", actor_output.shape)
 
-        #print("value ", value, "    actor out ", actor_output)
+        #From sb3 implementation
         below_threshold = torch.exp(self.action_std) * (self.action_std <= 0)
         # Avoid NaN: zeros values that are below zero
         safe_log_std = self.action_std * (self.action_std > 0) + 1e-6
@@ -424,11 +413,8 @@ class MimiPPOPolicy(nn.Module):
         std = below_threshold + above_threshold
         
         action_cov = torch.diag(std)
-        #print(action_cov, self.action_std)
         #action_cov = torch.diag(self.action_std)
         dist = MultivariateNormal(actor_output, action_cov)
-        #print("|||||||||||||| distr  forward   |||||||||||| ",  dist )
-
         return dist, value
     
     #return action, action logs probabs and value
@@ -438,28 +424,14 @@ class MimiPPOPolicy(nn.Module):
             action = dist.mean
         else:
             action = dist.rsample()
-        #action_log_probs = dist.log_prob(action)
-        #print("log probs not summed ", action_log_probs.shape, action_log_probs)
         action_log_probs = dist.log_prob(action)#.sum(dim=-1)
-        #print("summed ", action_log_probs.shape, action_log_probs)
-        #print(  "in act >>>>>>>>>>>>>" , action.shape, action_log_probs.shape, value.shape)
-        #action.squeeze()
-        #print(value.shape, action.shape)
         return action.squeeze(), action_log_probs, value.squeeze()
 
     #evaluating model for a given action
     def evaluate(self, state, action):
-        #print("|||||||||||||| state |||||||||||| ", state.shape )
-        #print("|||||||||||||| action     |||||||||||| ", action.shape )
         dist, value = self(state)
-        #print("|||||||||||||| distr     |||||||||||| ",  dist )
-
         action_log_probs = dist.log_prob(action)#.sum(dim=-1)
-        #print("action ==================  ", action )
-        #print("eval log prob        ", action_log_probs)
         dist_entropy = dist.entropy().sum(dim=-1)
-        #print("eval ", value.shape)
-        #print( "in eval <<<<<<<<<<<<<<<<<<<<< ", action.shape, action_log_probs.shape, value.shape)
         return action_log_probs, value.squeeze(), dist_entropy 
 
 

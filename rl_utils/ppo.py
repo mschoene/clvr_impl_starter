@@ -12,20 +12,15 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 import torch
-#from replayBuffer import *
 
 from torch.utils.data import DataLoader, RandomSampler
-#from torchsummary import summary
 from datetime import datetime
-
-#from dataclasses import dataclass, asdict
 
 from rl_utils.torch_utils import  get_averaged_tensor # np_to_torch
 from rl_utils.traj_utils import *
 from rl_utils.buffer import *
 
 import wandb
-
 import matplotlib.pyplot as plt
 
 
@@ -110,19 +105,14 @@ class MimiPPO:
 
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.writer = SummaryWriter('runs/RL_training_{}_{}_{}'.format(self.model_name,self.env_name ,self.timestamp))
-        #self.wandb_inst = wandb_inst
-        #self.optimizer = optim.Adam(self.model.parameters(), lr = self.lr)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, eps=1e-4)
         #self.optimizer = optim.RAdam( self.model.parameters(), betas = (0.9, 0.999))
 
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 1500, min_lr = 1e-5 )
 
-        # anneal action standard deviation from init value to -10 => exp(-10) = 0.00004539992
         self.final_log_std = final_log_std
         self.init_log_std = self.model.action_std.clone().detach()
-        self.annealing_rate = (self.init_log_std[0] - self.final_log_std) / 5000000.
-        self.annealing_rate.to("cpu") 
-        #self.annealing_rate = (self.final_log_std  / (self.init_log_std +1e-8)) ** (1. / 5000000.)
+
         self.do_wandb = do_wandb
         self.do_vf_clip = do_vf_clip
         self.do_lin_lr_decay = do_lin_lr_decay
@@ -132,8 +122,7 @@ class MimiPPO:
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
         counter = 0. #this counts the number of environment steps in total
-        next_threshold = 10000
-        #reward_batched = 0
+        next_threshold = 10000 #you get a log printout every next_threshold step
 
         while(counter < self.max_env_steps):
         #for iteration in range(self.n_episodes):
@@ -148,17 +137,8 @@ class MimiPPO:
             ###  collecting trajectories and appending the episodes to the buffer ###
             collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
             ###
-            #counter += (self.n_trajectories * self.n_actors * (self.n_traj_steps))
-            #counter += int ( len(self.replayBuffer))
-            if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
+            if (len(self.replayBuffer) == self.buffer_size):
                 counter += int ( (self.buffer_size)/self.off_poli_factor  )
-
-            #if(counter > 100000):
-            #    new_log_std = self.init_log_std  - (self.annealing_rate * counter) 
-                #print("init std " , self.init_log_std, self.annealing_rate , counter, new_log_std)
-                #new_log_std = self.model.action_std.to('cpu')- (self.annealing_rate.to("cpu")  * counter) 
-                #new_log_std = self.model.action_std * (self.annealing_rate ** counter)
-            #    self.model.action_std.data = torch.tensor( new_log_std )#.to(self.device)
 
             if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
                 for i_epoch in range(self.n_epochs):   
@@ -179,7 +159,7 @@ class MimiPPO:
                        self.model.to(self.device)
                        data.to(self.device)
 
-                    dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True) #, num_workers=4)
+                    dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True)
                     
                     self.model.train()
 
@@ -196,31 +176,17 @@ class MimiPPO:
                         #evaluate state action:
                         action_probas_prop, value_prop, entropy_prop = self.model.evaluate(pos_t_batched, actions_batched)
 
-                        #action_probas_prop_notSummed = action_probas_prop
-                        #action_probas_old_batched_notSummed = action_probas_old_batched
-                        #action_probas_prop = action_probas_prop.sum(dim=-1)
-                        #action_probas_old_batched = action_probas_old_batched.sum(dim=-1)
-
-                        #print(action_probas_prop_notSummed.shape, action_probas_old_batched_notSummed.shape, action_probas_prop.shape, action_probas_old_batched.shape)
-                        #print(action_probas_prop_notSummed[0], action_probas_old_batched_notSummed[0], action_probas_prop[0], action_probas_old_batched[0])
-                        #print( "eval ", action_probas_prop )
-                        #print( "batch",  action_probas_old_batched )
-
                         ap_ratio = torch.exp( action_probas_prop- action_probas_old_batched )
 
                         if(self.do_a2c): #do unclipped advantage policy loss
                             action_loss = -( ap_ratio * advantage_batched).mean() 
                         else: # do PPO clipping
                             clipped_ratio = torch.clamp(ap_ratio,  (1.-self.epsilon), (1.+ self.epsilon) )
-                            act1 = ap_ratio * advantage_batched  #/( ap_ratio.mean() + 10e-8)
-                            act2 = clipped_ratio * advantage_batched # /( clipped_ratio.mean() + 10e-8)
-                            #action_loss = -torch.min(act1 , act2 )
+                            act1 = ap_ratio * advantage_batched
+                            act2 = clipped_ratio * advantage_batched 
                             action_loss = -torch.min(act1 , act2 ).mean() 
-                            #action_loss = -torch.min(act1 /(act1.mean()), act2 /(act2.mean()) ).mean() 
-                            #action_loss = (action_loss/ (ap_ratio.mean()) ).mean()
 
                         if self.do_vf_clip:
-                            #print(value_batched.shape, return_batched.shape, value_prop.shape)
                             value_loss =  (value_batched - return_batched).pow(2)
                             value_clip = value_batched + torch.clamp( value_prop -value_batched, -self.epsilon, self.epsilon)
                             value_loss_clipped = (value_clip - return_batched ).pow(2)
@@ -317,11 +283,9 @@ class MimiPPO:
                                 #'Policy/return_batched': wandb.Histogram(return_batched.detach().cpu().numpy()),
 
                             })
-                    #self.scheduler.step(total_loss)
                 if self.do_lin_lr_decay:
                     update_linear_schedule(self.optimizer, counter, self.max_env_steps, self.lr)
 
-        #if (counter > self.max_env_steps):
         print("DONE " , self.max_env_steps , " steps")
         model_path = 'runs/RL_trained_model_{}_{}_{}'.format(self.model_name,self.env_name, self.timestamp)
         torch.save(self.model.state_dict(), model_path)
