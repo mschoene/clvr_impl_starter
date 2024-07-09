@@ -70,7 +70,7 @@ class MimiPPO:
                 do_wandb = False,
                 do_vf_clip = True, 
                 do_lin_lr_decay = True,
-                verbose = True,
+                verbose = False,
             ): #this is not a sad smiley but a very hungry duck
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

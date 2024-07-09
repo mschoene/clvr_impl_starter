@@ -205,7 +205,6 @@ def train(args):
     print("===========   done training   ===========")
     end = time.time()
     print("finished training in ", end- start , " seconds")
-    make_histos(ppo_trainer)
 
 
 def main(args):
