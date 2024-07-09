@@ -459,7 +459,7 @@ class MimiPPOPolicy(nn.Module):
         #print("eval log prob        ", action_log_probs)
         dist_entropy = dist.entropy().sum(dim=-1)
         #print("eval ", value.shape)
-        print( "in eval <<<<<<<<<<<<<<<<<<<<< ", action.shape, action_log_probs.shape, value.shape)
+        #print( "in eval <<<<<<<<<<<<<<<<<<<<< ", action.shape, action_log_probs.shape, value.shape)
         return action_log_probs, value.squeeze(), dist_entropy 
 
 
