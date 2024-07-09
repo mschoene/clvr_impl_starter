@@ -113,7 +113,7 @@ def main(args):
     if do_pretrained_enc:
         print("Loading the pretrained encoder ")
         encoder = ImageEncoder(input_channels=input_channels, output_size=output_size)
-        pretrained_path = "models/encoder_model_2obj_20240708_172636_49" 
+        pretrained_path = "models/encoder_model_2obj_20240708_223549_149"
         #pretrained_path = "models/encoder_model_2obj_20240620_153556_299"
         encoder = load_pretrained_weights(encoder, pretrained_path)
         encoder.eval()  # Set to evaluation mode
