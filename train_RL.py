@@ -10,8 +10,8 @@ import argparse
 import torch
 import wandb
 import time
-
 from rl_utils.torch_utils import load_pretrained_weights
+
 
 #Freeze params with False
 def set_parameter_requires_grad(model, requires_grad=False):
@@ -50,45 +50,40 @@ sweep_config = {
     }
 }
 
-baselines = ['oracle', 'cnn', 'enc', 'enc_ft', 'repr', 'repr_ft']
-distractor_counts = [0, 1, 2, 3]
+#baselines = ['oracle', 'cnn', 'enc', 'enc_ft', 'repr', 'repr_ft']
+#distractor_counts = [0, 1, 2, 3]
 
-def generate_run_name(baseline, num_distractors):
-    return f"{baseline}_d_{num_distractors}"
+def generate_run_name(baseline, num_distractors, name_ext):
+    if name_ext:
+        return f"{baseline}_d_{num_distractors}_{name_ext}"
+    else:
+        return f"{baseline}_d_{num_distractors}"
 
-import gym
-
-
-# Initialize the sweep
-#sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
 
 def train(args):
 
-    #config = wandb.config
-    #sweep_id = wandb.sweep(sweep_config, project='clvr_starter')
-    #wandb.init(project='your_project_name', config=wandb_config)
     if args.do_sweep:
-        wandb.init(project='clvr_starter') #, config=wandb_config)
+        wandb.init(project='clvr_starter')
 
     if args.do_wandb_exp:
-        run_name = generate_run_name(args.model_name.lower() , args.n_distractors)
+        run_name = generate_run_name(args.model_name.lower() , args.n_distractors, args.name_extension)
         wandb.init(project="clvr_starter", name=run_name, config={
         "baseline": args.model_name.lower(),
         "num_distractors": args.n_distractors,
         })
     
-    actions_space_std =  args.action_std_init #0. #-1. #0 #-1. # 0.5
+    actions_space_std =  args.action_std_init 
     ent_coef = args.ent_coef
     minibatch_size = args.minibatch_size
 
     model_name = args.model_name.lower()
     policy_input_dim = 64
     env_name = f'Sprites-v{args.n_distractors}'
-    separate_ac_mlps = args.sep_ac #  False
+    separate_ac_mlps = args.sep_ac 
     ac_hidden_layers = args.n_ac_hl
     ac_hidden_size = 32
     epsilon = args.epsilon
-    learning_rate = args.learning_rate # 1e-4
+    learning_rate = args.learning_rate 
     final_log_std = args.action_std_final
     n_traj = args.n_traj
     n_actors = args.n_actors
@@ -98,10 +93,8 @@ def train(args):
     # Get hyperparameters from wandb.config
     if args.do_sweep:
         minibatch_size = wandb.config.batch_size
-
         epsilon = wandb.config.clip_param
         learning_rate = wandb.config.learning_rate
-        #final_log_std = wandb.config.final_log_std
         n_traj = wandb.config.n_traj
         n_actors = wandb.config.n_actors
         std_coef = wandb.config.std_coef
@@ -119,48 +112,50 @@ def train(args):
         policy_input_dim = 32
 
     elif model_name == 'cnn':
-        encoder = CNN()  # --ent_coef 0.0004 --std_coef 0.2 --minibatch_size 128
-        ac_hidden_layers = 1 #2# 1
+        encoder = CNN() 
+        ac_hidden_layers = 1 
         ac_hidden_size = 64
-        #separate_ac_mlps = True # TODO just a test if split works better at all
         separate_ac_mlps = False
 
     elif model_name == 'img':
         encoder = ImageEncoder(1, 64)
         separate_ac_mlps = True
-        #ent_coef=0.0005  
 
 
     elif model_name =="enc": #pretrained encoder, frozen
-        pretrained_path = "models/encoder_model_2obj_20240620_153556_299"
+        pretrained_path = "models/encoder_model_2obj_20240708_223549_149"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        #ent_coef=0.0006 
         set_parameter_requires_grad(encoder, requires_grad=False)
     elif model_name =="enc_ft": #pretrained encoder, fine tuning
-        pretrained_path = "models/encoder_model_2obj_20240620_153556_299"
+        pretrained_path = "models/encoder_model_2obj_20240708_223549_149"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        #ent_coef=0.0005
         set_parameter_requires_grad(encoder, requires_grad=True)
 
 
     elif model_name == "repr": # pretrained representation encoder
-        pretrained_path = "models/repr_encoder_full_model_epoch_499_20240622_063255"
+        if args.n_distractors == 0:
+            pretrained_path = "models/repr_encoder_full_nDistr_0_doPre_0_model_epoch_500_20240708_152431"
+        else:
+            pretrained_path = "models/repr_encoder_full_nDistr_1_doPre_0_model_epoch_500_20240709_002237"
+
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        #ent_coef=0.0005   
         set_parameter_requires_grad(encoder, requires_grad=False)
 
     elif model_name =="repr_ft": #pretrained representation encoder, fine tuning
-        pretrained_path = "models/repr_encoder_full_model_epoch_499_20240622_063255"
+        if args.n_distractors == 0:
+            pretrained_path = "models/repr_encoder_full_nDistr_0_doPre_0_model_epoch_500_20240708_152431"
+        else:
+            pretrained_path = "models/repr_encoder_full_nDistr_1_doPre_0_model_epoch_500_20240709_002237"
+
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
-        #ent_coef=0.0001 
         set_parameter_requires_grad(encoder, requires_grad=True)
 
     else:
@@ -259,62 +254,8 @@ if __name__ == "__main__":
     parser.add_argument('--do_sweep', type=bool, default=False, help="Do a HP sweep")
     parser.add_argument('--do_wandb_exp', type=bool, default=False, help="Do wandb experiment and logging")
 
+    parser.add_argument('--name_extension', type=str, default="", help="Add a descriptive name to the output files and run name")
+
     args = parser.parse_args()
-    #wandb.config.update(args)
 
     main(args)
-
-
-#rollout = repBuf(-10, -1)
-#obs = repBuf[-20][4]
-#print(obs)
-##white line between figures
-#white_layer = np.ones((64,2), dtype=np.uint8) * 255
-#
-#for rolli in range(-20, -1): #rollout[1:]:
-#        obs = np.concatenate((obs, white_layer), axis=1)
-#        obs = np.concatenate((obs, repBuf[rolli][4]), axis = 1)
-#cv2.imwrite("RL_train_test_oracle.png", 255* np.expand_dims(obs, -1))
-#
-#obs2 = repBuf[-50][4]
-#for rolli in range(-50, -30): #rollout[1:]:
-#        obs2 = np.concatenate((obs2, white_layer), axis=1)
-#        obs2 = np.concatenate((obs2, repBuf[rolli][4]), axis = 1)
-#cv2.imwrite("RL_train_test_oracle2.png", 255* np.expand_dims(obs2, -1))
-
-#   obs = env.reset()
-#    cv2.imwrite("test_rl.png", 255 * np.expand_dims(obs, -1))
-#    obs, reward, done, info = env.step([0, 0])
-#    cv2.imwrite("test_rl_1.png", 255 * np.expand_dims(obs, -1))
-
-
-def make_histos_position(ppo_trainer):
-    x_values = []
-    y_values = []
-
-    #print(repBuf[0][1][0])
-    for item in range(len(ppo_trainer.replayBuffer)):
-        x, y = ppo_trainer.replayBuffer[item][0][0][0:2].tolist()
-        x_values.append(x)
-        y_values.append(y)
-    x_values = np.array(x_values)
-    y_values = np.array(y_values)
-
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(10, 5))
-
-    plt.subplot(1, 2, 1)
-    plt.hist(x_values, bins=100, color='blue', alpha=0.7)
-    plt.title('Histogram of X pos agent')
-    plt.xlabel('X')
-    plt.ylabel('Frequency')
-
-    plt.subplot(1, 2, 2)
-    plt.hist(y_values, bins=100, color='green', alpha=0.7)
-    plt.title('Histogram of Y pos agent')
-    plt.xlabel('Y')
-    plt.ylabel('Frequency')
-    plt.tight_layout()
-
-    plt.savefig('histograms.png')
-

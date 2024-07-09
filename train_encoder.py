@@ -129,7 +129,6 @@ def train_one_epoch(epoch_index, tb_writer):
 
         optimizer_ae.zero_grad()
 
-
         loss_ae = 0.
 
         in_img = inputs[:, 0, ...] #.squeeze(1)
@@ -181,11 +180,9 @@ def do_epochs(EPOCHS=1000):
         with torch.no_grad():
             for i, vdata in enumerate(dataloader_valid): #validation_loader):
                 counter += 1
-                #vinputs, vlabels = vdata.images[:, 0, ...].squeeze(1), vdata.images[:, 0, ...].squeeze(1)
-                
 
-                vinputs = vdata.images#[:, :n_conditioning_frames, ...] #take only first n images as inputs (tech not nec since model anyway only uses 3) #TODO make more general
-                vlabel_img = vdata.images#[:, :n_conditioning_frames, ...]
+                vinputs = vdata.images
+                vlabel_img = vdata.images
 
                 vinputs = vinputs.to(device)
                 #vlabels = vlabels.to(device)
@@ -239,12 +236,4 @@ def do_epochs(EPOCHS=1000):
 
 do_epochs(150)
 
-
-
-#model = autoencoder
-#model.load_state_dict(torch.load('/home/myriam/KAIST/code/starter/clvr_impl_starter/model_20240429_025411_65'))
-#model.load_state_dict(torch.load('model_20240429_025411_11'))
-#model.load_state_dict(torch.load('model_20240429_025411_39'))
-#model.load_state_dict(torch.load('model_20240429_025411_65'))
-#model.eval()
-
+ 
