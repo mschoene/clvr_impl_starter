@@ -113,12 +113,18 @@ def main(args):
     if do_pretrained_enc:
         print("Loading the pretrained encoder ")
         encoder = ImageEncoder(input_channels=input_channels, output_size=output_size)
-        if n_distractors==0:
-            pretrained_path = "models/encoder_model_2obj_20240708_223549_149"
-        elif n_distractors==1:
-            pretrained_path = "models/encoder_model_2obj_nDistr_1_20240709_134803_150"
-        else:
-            pretrained_path = "models/encoder_model_2obj_nDistr_2_20240709_165324_150" 
+        if(train_type =="full"):
+            if n_distractors==0:
+                pretrained_path = "models/encoder_model_2obj_20240708_223549_149"
+            elif n_distractors==1:
+                pretrained_path = "models/encoder_model_2obj_nDistr_1_20240709_134803_150"
+            else:
+                pretrained_path = "models/encoder_model_2obj_nDistr_2_20240709_165324_150" 
+        if(train_type =='vert'):
+            pretrained_path = "models/repr_encoder_vert_nDistr_0_doPre_0_model_epoch_500_20240708_142535"
+        if(train_type =='horiz'):
+            pretrained_path = "models/repr_encoder_horiz_nDistr_0_doPre_0_model_epoch_500_20240708_144153"
+
         encoder = load_pretrained_weights(encoder, pretrained_path)
         encoder.eval()  # Set to evaluation mode
         for param in encoder.parameters():
@@ -142,22 +148,19 @@ def main(args):
     else:                   # ie we train the encoder params
         optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()) + list(encoder.parameters()), betas=(0.9, 0.999))
 
+
     predictor.to(device)
     reward_predictor.to(device)
     decoder.to(device)
     encoder.to(device)
 
-    #print( summary(reward_predictor, (input_channels, output_size, batch_size)) )
-    # Initializing in a separate cell so we can easily add more epochs to the same run
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     writer = SummaryWriter('runs/encoder_repr_trainer__{}_nDistr_{}_doPre_{}_model_epoch_{}'.format(train_type, n_distractors, do_pretrained_enc, timestamp))
 
-    #epoch_number = 0
-
+    # Trafo from rgb to grey scale img (-1,1)
     trafo = v2.Compose([v2.Grayscale(num_output_channels=1) ])
 
-
-    # or place in epoch loop to get fresh data each epoch so we don't overfit? TODO
+    # Define training and validation data
     train_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples)
     valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=batch_size*4) #4 bachtes as validation size
     if(train_type =="full"):
@@ -173,7 +176,6 @@ def main(args):
         loss = 0.0
         loss_dec = 0.0
         total_head_losses = [0.0] * n_heads  # Initialize total loss for each head
-        all_gradients = []
 
         # Loop over batches
         for i_batch, sample_batched in enumerate(i_dataloader):
@@ -267,7 +269,7 @@ def main(args):
             running_loss += loss.item()  
 
                            
-        if (epoch_index%50==0 and epoch_index >0):
+        if (epoch_index%10==0 and epoch_index >0):
             vin_img_truth_1seq= label_img[0, :n_conditioning_frames, ...] #.squeeze(1)
             display = list(dec_img[ 0:n_conditioning_frames, ...]) + list(vin_img_truth_1seq)
             display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames)
