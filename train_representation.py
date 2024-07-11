@@ -121,9 +121,9 @@ def main(args):
             else:
                 pretrained_path = "models/encoder_model_2obj_nDistr_2_20240709_165324_150" 
         if(train_type =='vert'):
-            pretrained_path = "models/repr_encoder_vert_nDistr_0_doPre_0_model_epoch_500_20240708_142535"
+            pretrained_path = "models/repr_encoder_vert_nDistr_0_doPre_0_model_epoch_100_20240708_142535"
         if(train_type =='horiz'):
-            pretrained_path = "models/repr_encoder_horiz_nDistr_0_doPre_0_model_epoch_500_20240708_144153"
+            pretrained_path = "models/repr_encoder_horiz_nDistr_0_doPre_0_model_epoch_100_20240708_144153"
 
         encoder = load_pretrained_weights(encoder, pretrained_path)
         encoder.eval()  # Set to evaluation mode
