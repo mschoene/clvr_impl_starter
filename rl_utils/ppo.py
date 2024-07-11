@@ -25,10 +25,24 @@ import matplotlib.pyplot as plt
 
 
 
-def update_linear_schedule(optimizer, epoch, total_num_epochs, initial_lr):
-    """Decreases the learning rate linearly"""
-    lr = initial_lr - (initial_lr * (epoch / float(total_num_epochs)))
-    for param_group in optimizer.param_groups:
+#def update_linear_schedule(optimizer, epoch, total_num_epochs, initial_lr):
+#    """Decreases the learning rate linearly"""
+#    lr = initial_lr - (initial_lr * (epoch / float(total_num_epochs)))
+#    for param_group in optimizer.param_groups:
+#        param_group['lr'] = lr
+#
+def update_linear_schedule(optimizer, epoch, total_num_epochs, initial_lrs):
+    """
+    Linearly decreases the learning rate for each parameter group based on the epoch.
+
+    Args:
+        optimizer (torch.optim.Optimizer): The optimizer to update.
+        epoch (int): The current epoch or alternatively the number of env steps
+        total_num_epochs (int): The total number of epochs or alternatively the number of total env steps
+        initial_lrs (list): List of initial learning rates for each parameter group.
+    """
+    for param_group, initial_lr in zip(optimizer.param_groups, initial_lrs):
+        lr = initial_lr * (1 - epoch / float(total_num_epochs))
         param_group['lr'] = lr
 
 
@@ -55,6 +69,7 @@ class MimiPPO:
                 n_actors = 4, # 8, #4, #40, #20, #8, 
                 n_traj_steps = 40, #49,
                 lr = 0.0003,
+                lr_enc = 0.0003,
                 epsilon = 0.1, #0.2,
                 n_episodes = 500,
                 n_epochs = 10,
@@ -65,7 +80,7 @@ class MimiPPO:
                 do_wandb = False,
                 do_vf_clip = True, 
                 do_lin_lr_decay = True,
-                verbose = False,
+                verbose = True, # False,
             ): #this is not a sad smiley but a very hungry duck
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -101,11 +116,21 @@ class MimiPPO:
         self.minibatch_size = minibatch_size # size of the batch to average over 
         self.replayBuffer = replayBuffer(self.buffer_size)
         self.lr = lr
+        self.lr_enc = lr_enc
         self.epsilon = epsilon
 
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.writer = SummaryWriter('runs/RL_training_{}_{}_{}'.format(self.model_name,self.env_name ,self.timestamp))
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, eps=1e-4)
+        #self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, eps=1e-4)
+
+
+        encoder_params = set(self.model.encoder.parameters())
+        all_params = set(self.model.parameters())
+        rest_params = all_params - encoder_params
+        self.optimizer = optim.Adam([
+            {'params': model.encoder.parameters(), 'lr': self.lr},
+            {'params': list(rest_params), 'lr': self.lr_enc}
+            ], eps=1e-4)
         #self.optimizer = optim.RAdam( self.model.parameters(), betas = (0.9, 0.999))
 
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 1500, min_lr = 1e-5 )
@@ -268,23 +293,10 @@ class MimiPPO:
                                 'loss_vf': avg_value_loss,
                                 'average_reward': avg_reward,
                                 'action_std': self.model.action_std.data[0].cpu(),
-                                'Step': counter , 
-
-                                #'Rewards/Distribution': wandb.Histogram(np.array(rewards_for_log)),
-                                #'Policy/ap_ratio': wandb.Histogram(ap_ratio.detach().cpu().numpy()),
-                                #'Policy/ap_ratio_clipped': wandb.Histogram(clipped_ratio.detach().cpu().numpy()),
-                                #'Policy/avd_r_clip': wandb.Histogram(act2.detach().cpu().numpy()),
-                                #'Policy/avd_r': wandb.Histogram(act1.detach().cpu().numpy()),
-                                #'Policy/action_proba_eval': wandb.Histogram(action_probas_prop.detach().cpu().numpy()),
-                                #'Policy/action_proba_batch': wandb.Histogram(action_probas_old_batched.detach().cpu().numpy()),
-                                #'Policy/actions_batched': wandb.Histogram(actions_batched.detach().cpu().numpy()),
-                                #'Policy/value_prop': wandb.Histogram(value_prop.detach().cpu().numpy()),
-                                #'Policy/value_batched': wandb.Histogram(value_batched.detach().cpu().numpy()),
-                                #'Policy/return_batched': wandb.Histogram(return_batched.detach().cpu().numpy()),
-
+                                'Step': counter 
                             })
                 if self.do_lin_lr_decay:
-                    update_linear_schedule(self.optimizer, counter, self.max_env_steps, self.lr)
+                    update_linear_schedule(self.optimizer, counter, self.max_env_steps, [self.lr, self.lr_enc])
 
         print("DONE " , self.max_env_steps , " steps")
         model_path = 'runs/RL_trained_model_{}_{}_{}'.format(self.model_name,self.env_name, self.timestamp)

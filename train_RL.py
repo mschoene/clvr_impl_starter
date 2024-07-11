@@ -262,8 +262,11 @@ if __name__ == "__main__":
     parser.add_argument('--action_std_final', type=float, default=0.0, help="Initial log action standard deviation.")
     parser.add_argument('--epsilon', type=float, default=0.2, help="Advantage clipping factor.")
     parser.add_argument('--n_traj', type=int, default=10, help="Number trajectories to sample.")
+
     parser.add_argument('--learning_rate', type=float, default=0.0003, help="Learning rate")
-    parser.add_argument('--off_p_frac', type=float, default=1.0, help="Fraction of off policy events to keep in replay buffer, >1 means going off policy")
+    parser.add_argument('--learning_rate_enc', type=float, default=0.0003, help="Learning rate for the encoder. Set this if using a pretrained encoder")
+
+    parser.add_argument('--off_p_frac', type=float, default=1.0, help="Fraction of off policy events to keep in replay buffer, >1 means going off policy. Warning this currently does currently not have any correction applied!")
     parser.add_argument('--n_actors', type=int, default=4, help="Number of actors ")
     
     parser.add_argument('--n_ac_hl', type=int, default=2, help="Number of hidden layers in MLP AC feature extractor ")
