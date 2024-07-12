@@ -10,19 +10,6 @@ import gym
 import multiprocessing as mp
 
 
-class ScaledReward(gym.RewardWrapper):
-    def __init__(self, env, min_reward=0.65, max_reward=1):
-        super().__init__(env)
-        self.min_reward = min_reward
-        self.max_reward = max_reward
-        self.reward_range = (min_reward, max_reward)
-    
-    def reward(self, reward):
-        scaled_reward = 2 * (reward - 0.65) / (1- 0.65)
-        return scaled_reward
-
-
-
 class RunningMeanStd:
     def __init__(self, epsilon=1e-4, shape=()):
         self.mean = np.zeros(shape, 'float64')
@@ -67,65 +54,40 @@ def normalize_rewards_with_running_stats(rewards):
 EpisodeStep = namedtuple('EpisodeStep', ['state', 'action', 'action_probas', 'reward', 'done', 'value', 'ret', 'advantage'])
 
 
-def collect_trajectory_step(actor, state, env, episode):
-    action, action_proba, value = actor.act(state) 
+def collect_trajectory_step(actor, state, env, episode, deterministic=False ):
+    action, action_proba, value = actor.act(state, deterministic) 
     next_state_obs, reward, done, _ = env.step(action) # dont need the info, put in _
-    #next_state_obs, reward, done = env.step(action) # dont need the info, put in _
-    #reward = reward - 0.6
-    #reward =  2 * (reward - 0.65) / (1- 0.65)
     episode.append(EpisodeStep(state, action, action_proba, reward, done, value, 0., 0.))
 
     return np_to_torch(next_state_obs), done
 
-def collect_trajectory(seed, actor, env_name, max_steps):
+def collect_trajectory(seed, actor, env_name, max_steps , deterministic=False ):
     episode = []
     env = gym.make(env_name)
-    #env = ScaledReward(env)
-    #seed = np.random.randint(0, 10000)
     env.seed(seed)
-    #env.seed(0)
     state = env.reset()
     state = np_to_torch(state)
     with torch.no_grad():
         actor.eval()
         for st in range(max_steps):
             #print(seed, st )
-            pos_t, done = collect_trajectory_step(actor, state, env, episode)
+            pos_t, done = collect_trajectory_step(actor, state, env, episode, deterministic )
             if done:
                 break 
             state = pos_t # init state for next step 
     return episode
 
 
-#def collect_n_trajectories(n_traj, replayBuffer, actor, env, n_traj_steps, gamma, lambda_val, n_workers = 4):
-
-    #if len(replayBuffer) + n_traj_steps*n_workers*n_traj > replayBuffer.maxlen:
-    #        print("popping length away ")
-    #        replayBuffer.pop_batch(n_traj_steps*n_workers*n_traj)
-    #        print("popping length away ")
-    #seeds = np.random.randint(0, 10000, size=n_traj* n_workers)
-    #for _ in range(n_traj*n_workers):
-    #    print(_)
-    #    episode = collect_trajectory(actor, env, n_traj_steps)
-         
-    #    episode = calc_discd_vals(episode, gamma, lambda_val)
-        
-    #    for e_t in episode:
-    #        replayBuffer.append(list(e_t))
-        #for e_t in episode:
-        #    print( e_t)
-        #    replayBuffer.append([v for v in asdict(e_t).values()])
-
-def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, gamma, lambda_val, n_workers = 4):
+def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, gamma, lambda_val, n_workers = 4, deterministic=False ):
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = []
-        #np.random.seed(0) #TODO each worker produces n_traj many different env 
-        seeds = np.random.randint(0, 10000, size=n_traj)
+        # each worker produces n_traj many different env 
+        seeds = np.random.randint(0, 20000, size=n_traj)
         #print(seeds)
-        for seed in seeds: # collect bundle (nworker many) traj with same starting point
+        for seed in seeds: # collect bundle/vine (nworker many) traj with same starting point
         #for _ in range(n_traj):
-            future = executor.submit(collect_trajectory,seed, actor, env_name, n_traj_steps)
+            future = executor.submit(collect_trajectory,seed, actor, env_name, n_traj_steps  , deterministic)
             #calc_discd_vals(future.result(), gamma, lambda_val)
             futures.append(future)
 

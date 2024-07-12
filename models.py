@@ -374,7 +374,7 @@ class CNN(nn.Module):
 ### Policy maker: given an encoder make it into a MimiPPOP  ###
 ###############################################################
 class MimiPPOPolicy(nn.Module):
-    def __init__(self, enc, obs_dim, action_space, action_std_init, encoder_output_size= 64, separate_layers=0, hidden_layer_dim = 32, num_hidden_layers=2, gradStd=True):
+    def __init__(self, enc, obs_dim, action_space, action_std_init, encoder_output_size= 64, separate_layers=0, hidden_layer_dim = 32, num_hidden_layers=2, gradStd=False):
         super(MimiPPOPolicy, self).__init__()
 
         self.encoder = enc

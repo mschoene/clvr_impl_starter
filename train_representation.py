@@ -134,20 +134,20 @@ def main(args):
 
     decoder = ImageDecoder(input_channels=output_size, output_size=output_size)
 
+    # LSTM
     predictor = Predictor( input_channels, output_size, batch_size , n_cond_frames=n_conditioning_frames, n_pred_frames=n_prediction_frames)
+    # reward head(s)
     reward_predictor = RewardPredictor(n_pred_frames=n_prediction_frames, n_heads=n_heads, lstm_output_size=64)
 
     loss_fn_decoder = nn.MSELoss()
     loss_fn_repr = nn.MSELoss()
 
-    #optimizer_repr = optim.RAdam( list(predictor.parameters()) + list(reward_predictor.parameters()), betas = (0.9, 0.999))
     optimizer_deco = optim.RAdam( decoder.parameters(), betas = (0.9, 0.999))
 
     if do_pretrained_enc:   # ie fixed encoder from AE
         optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()), betas=(0.9, 0.999))
     else:                   # ie we train the encoder params
         optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()) + list(encoder.parameters()), betas=(0.9, 0.999))
-
 
     predictor.to(device)
     reward_predictor.to(device)

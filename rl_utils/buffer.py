@@ -20,15 +20,16 @@ class ReplayBuffer(deque):
     def __init__(self, maxlen):
         super().__init__(maxlen=maxlen)
     
+    def get_last_n_experiences(self, n):
+        if len(self) < n:
+            return list(self)
+        return list(self)[-n:]
+    
 class NpDataset(Dataset):
     def __init__(self, array):
         self.array = array
     def __len__(self): return len(self.array) 
     def __getitem__(self, i): return self.array[i]
-    #def to(self, device):
-    #    self.array = [ele.to(device) for ele in self.array]
-    #    return self
-    
     def to(self, device):
         # Move each element of the namedtuple to the device
         self.array = [EpisodeStep(*[ele.to(device) if torch.is_tensor(ele) else ele for ele in step]) for step in self.array]
