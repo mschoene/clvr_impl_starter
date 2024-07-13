@@ -53,37 +53,38 @@ def conditional_no_grad(condition):
         yield
 
 
-def monitor_gradients(model):
-    grad_info = {}
-    for name, param in model.named_parameters():
-        if param.grad is not None:
-            grad_info[name] = {
-                'mean': param.grad.mean().item(),
-                'std': param.grad.std().item(),
-                'max': param.grad.abs().max().item()
-            }
-    return grad_info
-
-
 def main(args):
 
     train_type = args.type 
     train_epochs = args.n_epochs
     n_distractors = args.n_distractors
     do_pretrained_enc = args.do_pre_enc
+    n_cond_fr = args.n_cond_frames
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     print("DEVICE IS ", device)
 
-    spec = AttrDict(
-            resolution=64,
-            max_seq_len=40, #30, #30,
-            max_speed=0.05,      # total image range [0, 1]
-            obj_size=0.2,       # size of objects, full images is 1.0
-            shapes_per_traj=1,      # number of shapes per trajectory
-            rewards=[VertPosReward, HorPosReward]
-        )
+
+    if train_type=="horiz":
+        spec = AttrDict(
+                resolution=64,
+                max_seq_len=40, #30, #30,
+                max_speed=0.05,      # total image range [0, 1]
+                obj_size=0.2,       # size of objects, full images is 1.0
+                shapes_per_traj=1,      # number of shapes per trajectory
+                rewards=[HorPosReward]
+            )
+        
+    if train_type=="vert":
+        spec = AttrDict(
+                resolution=64,
+                max_seq_len=40, #30, #30,
+                max_speed=0.05,      # total image range [0, 1]
+                obj_size=0.2,       # size of objects, full images is 1.0
+                shapes_per_traj=1,      # number of shapes per trajectory
+                rewards=[VertPosReward]
+            )
 
     if(train_type =="full"):
         spec = AttrDict(
@@ -95,15 +96,15 @@ def main(args):
                 rewards=[TargetXReward, TargetYReward, AgentXReward, AgentYReward]
             )
 
-    n_conditioning_frames = 25 #0# 10 #3 #10 #3
+    n_conditioning_frames = n_cond_fr #3 #10 #0# 10 #3 #10 #3
     n_prediction_frames = spec['max_seq_len'] - n_conditioning_frames #25 
     batch_size = 32 # 16 #64 # 32 #128 #16 # 32 #64 #32 #128 # 64 #128 #64
     n_batches = 16 #20 #20 #100
     n_samples = batch_size*n_batches
 
-    input_channels = 1 # 3 but we change it to grey scale first
-    #this is the size of the input image and also the size of the latent space
-    output_size = spec['resolution']  #64
+    input_channels = 1 # 3 but we transform images to grey scale first
+    #this is the size of the input image
+    output_size = spec['resolution'] 
 
     n_heads = 1
     if(train_type =="full"):
@@ -121,7 +122,7 @@ def main(args):
             else:
                 pretrained_path = "models/encoder_model_2obj_nDistr_2_20240709_165324_150" 
         if(train_type =='vert'):
-            pretrained_path = "models/repr_encoder_vert_nDistr_0_doPre_0_model_epoch_100_20240708_142535"
+            pretrained_path = "models/repr_encoder_vert_nDistr_0_doPre_0_model_epoch_500_20240713_124542" #models/repr_encoder_vert_nDistr_0_doPre_0_model_epoch_100_20240708_142535"
         if(train_type =='horiz'):
             pretrained_path = "models/repr_encoder_horiz_nDistr_0_doPre_0_model_epoch_100_20240708_144153"
 
@@ -132,7 +133,15 @@ def main(args):
     else:
         encoder = ImageEncoder(input_channels=input_channels, output_size=output_size)
 
+
     decoder = ImageDecoder(input_channels=output_size, output_size=output_size)
+
+    #if(train_type =='vert'):
+    #        pretrained_path = "models/repr_decoder_vert_nDistr_0_doPre_0_model_epoch_500_20240713_124542" #models/repr_encoder_vert_nDistr_0_doPre_0_model_epoch_100_20240708_142535"
+    #if(train_type =='horiz'):
+    #    pretrained_path = "models/repr_encoder_horiz_nDistr_0_doPre_0_model_epoch_100_20240708_144153"
+    #decoder = load_pretrained_weights(decoder, pretrained_path)
+     
 
     # LSTM
     predictor = Predictor( input_channels, output_size, batch_size , n_cond_frames=n_conditioning_frames, n_pred_frames=n_prediction_frames)
@@ -155,19 +164,11 @@ def main(args):
     encoder.to(device)
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    writer = SummaryWriter('runs/encoder_repr_trainer__{}_nDistr_{}_doPre_{}_model_epoch_{}'.format(train_type, n_distractors, do_pretrained_enc, timestamp))
+    writer = SummaryWriter('runs/encoder_repr_trainer__{}_nDistr_{}_nCondFr_{}_doPre_{}_model_epoch_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, timestamp))
 
     # Trafo from rgb to grey scale img (-1,1)
     trafo = v2.Compose([v2.Grayscale(num_output_channels=1) ])
 
-    # Define training and validation data
-    train_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples)
-    valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=batch_size*4) #4 bachtes as validation size
-    if(train_type =="full"):
-        train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
-        valid_ds = MovingSpriteDataset(spec=spec, num_samples=batch_size*4)
-    dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=2)
-    dataloader_valid = DataLoader(valid_ds, batch_size=batch_size, num_workers=2)
 
 
     def train_one_epoch(epoch_index, i_dataloader, doTrain = True):
@@ -181,8 +182,10 @@ def main(args):
         for i_batch, sample_batched in enumerate(i_dataloader):
 
             with conditional_no_grad(not doTrain):
-                inputs_pre = sample_batched.images[:, 0:n_conditioning_frames, ...] 
-                label_img = sample_batched.images[:, 0:n_conditioning_frames, ...]
+                #inputs_pre = sample_batched.images[:, 0:n_conditioning_frames, ...] 
+                #label_img = sample_batched.images[:, 0:n_conditioning_frames, ...]                
+                inputs_pre = sample_batched.images
+                label_img = sample_batched.images
                 if train_type =="horiz":
                     labels = sample_batched.rewards['horizontal_position']
                 elif train_type=="vert":
@@ -220,7 +223,7 @@ def main(args):
                         loss_head = loss_fn_decoder(head_output, labels_reward[:, :, head_idx])
                         total_head_losses[head_idx] += loss_head.item()
 
-                if doTrain:
+                if doTrain : #and epoch_index < 100:
                     optimizer_repr.zero_grad()
                     loss.backward()
                     optimizer_repr.step()
@@ -230,6 +233,14 @@ def main(args):
                 enc_img_tensor = enc_img_tensor.reshape(-1, *enc_img_tensor.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)         
                 dec_img = decoder(enc_img_tensor)
                 in_img_truth = label_img.reshape(-1, *label_img.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)         
+                
+                #enc_img_tensor = torch.stack(predictions, dim=1)  # Shape will be (batch_size, sequence_length, encoded_dim)
+                #enc_img_tensor = predictions  # Shape will be (batch_size, sequence_length, encoded_dim)
+                #enc_img_tensor = enc_img_tensor.clone().detach().requires_grad_(False)
+                #enc_img_tensor = enc_img_tensor.reshape(-1, *enc_img_tensor.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)         
+                #dec_img = decoder(enc_img_tensor)
+                #label_img = label_img[:, n_conditioning_frames:, ...]
+                #in_img_truth = label_img.reshape(-1, *label_img.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)         
 
                 loss_dec = loss_fn_decoder(dec_img, in_img_truth)
 
@@ -238,7 +249,7 @@ def main(args):
                     optimizer_deco.zero_grad()
                     loss_dec.backward()
                     # we give the encoder some time to learn first
-                    if epoch_index > 30:
+                    if True : # epoch_index >  30:
                         optimizer_deco.step()
 
                     counter = (epoch_index)*len(i_dataloader) + i_batch
@@ -270,10 +281,12 @@ def main(args):
 
                            
         if (epoch_index%10==0 and epoch_index >0):
-            vin_img_truth_1seq= label_img[0, :n_conditioning_frames, ...] #.squeeze(1)
-            display = list(dec_img[ 0:n_conditioning_frames, ...]) + list(vin_img_truth_1seq)
-            display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames)
-            torchvision.utils.save_image(display, "models/ae_r_comp_{}_nDistr_{}_doPre_{}_epoch_{}_{}.png".format(train_type, n_distractors,do_pretrained_enc,  epoch_index, timestamp) )
+            vin_img_truth_1seq= label_img[0, :n_conditioning_frames+n_prediction_frames, ...] #.squeeze(1)
+            #display = list(dec_img[ 0:n_conditioning_frames, ...]) + list(vin_img_truth_1seq)
+            #display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames)
+            display = list(dec_img[ 0:n_conditioning_frames+n_prediction_frames, ...]) + list(vin_img_truth_1seq)
+            display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames+n_prediction_frames)
+            torchvision.utils.save_image(display, "models/ae_r_comp_{}_nDistr_{}_nCondFr_{}_doPre_{}_epoch_{}_{}.png".format(train_type, n_distractors, n_cond_fr, do_pretrained_enc,  epoch_index, timestamp) )
 
         if n_heads>1:
             avg_head_losses = [total_loss / len(i_dataloader) for total_loss in total_head_losses]
@@ -301,6 +314,15 @@ def main(args):
         for epoch_number in range(EPOCHS):
             print('EPOCH {}:'.format(epoch_number + 1))
 
+            # Define training and validation data
+            train_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples)
+            valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples) #4 bachtes as validation size
+            if(train_type =="full"):
+                train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
+                valid_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
+            dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=2)
+            dataloader_valid = DataLoader(valid_ds, batch_size=batch_size, num_workers=2)
+        
             # Make sure gradient tracking is on, and do a pass over the data
             predictor.train()
             reward_predictor.train()
@@ -333,12 +355,12 @@ def main(args):
 
             # Track best performance, and save the model's state
             #if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1:
-            if epoch_number==EPOCHS-1 or (epoch_number%100==0 and epoch_number >0):
-                model_path = 'models/repr_decoder_{}_nDistr_{}_doPre_{}_model_epoch_{}_{}'.format(train_type, n_distractors, do_pretrained_enc, epoch_number, timestamp)
+            if epoch_number==EPOCHS-1 or (epoch_number%50==0 and epoch_number >0):
+                model_path = 'models/repr_decoder_{}_nDistr_{}_nCondFr_{}_doPre_{}_model_epoch_{}_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, epoch_number, timestamp)
                 torch.save(decoder.state_dict(), model_path)
-                model_path = 'models/repr_encoder_{}_nDistr_{}_doPre_{}_model_epoch_{}_{}'.format(train_type, n_distractors, do_pretrained_enc, epoch_number, timestamp)
+                model_path = 'models/repr_encoder_{}_nDistr_{}_nCondFr_{}_doPre_{}_model_epoch_{}_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, epoch_number, timestamp)
                 torch.save(encoder.state_dict(), model_path)                
-                model_path = 'models/repr_lstm_{}_nDistr_{}_doPre_{}_model_epoch_{}_{}'.format(train_type, n_distractors, do_pretrained_enc, epoch_number, timestamp)
+                model_path = 'models/repr_lstm_{}_nDistr_{}_nCondFr_{}_doPre_{}_model_epoch_{}_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, epoch_number, timestamp)
                 torch.save(encoder.state_dict(), model_path)
 
             #if  avg_vloss < 0.00001:
@@ -356,6 +378,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_epochs', type=int, default=501, help="Number of training epochs to run, default 500.")
     parser.add_argument('--n_distractors', type=int, default=0, help="Number of distractors, default 0.")
     parser.add_argument('--do_pre_enc', type=int, default=0, help="Use pretrained encoder")
+    parser.add_argument('--n_cond_frames', type=int, default=3, help="Number of preconditioning frames")
 
 
     args = parser.parse_args()
