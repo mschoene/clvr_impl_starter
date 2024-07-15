@@ -2,7 +2,7 @@ import gym
 import numpy as np
 from general_utils import AttrDict
 from sprites_env.envs.sprites import SpritesEnv 
-from replayBuffer import *
+#from replayBuffer import *
 from models import Oracle, CNN, MimiPPOPolicy, ImageEncoder
 from rl_utils.traj_utils import *
 from rl_utils.ppo import MimiPPO
