@@ -281,13 +281,14 @@ def main(args):
             running_loss_dec += loss_dec.item()  
             running_loss += loss.item()  
 
-                           
-        if (epoch_index%10==0 and epoch_index >0):
+        #save an example reconstruction  
+        if (epoch_index%100==0 and epoch_index >0):
             vin_img_truth_1seq= label_img[0, :n_conditioning_frames+n_prediction_frames, ...] #.squeeze(1)
             display = list(dec_img[ 0:n_conditioning_frames+n_prediction_frames, ...]) + list(vin_img_truth_1seq)
             display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames+n_prediction_frames)
             torchvision.utils.save_image(display, "models/ae_r_comp_{}_{}_{}.png".format(ext_str, epoch_index, timestamp) )
 
+        # print per head loss as a sanity check and for table
         if n_heads>1:
             avg_head_losses = [total_loss / len(i_dataloader) for total_loss in total_head_losses]
             loss_dict = {f'Loss/Head_{head_idx}': avg_lossi for head_idx, avg_lossi in enumerate(avg_head_losses)}
@@ -355,7 +356,7 @@ def main(args):
 
             # Track best performance, and save the model's state
             #if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1:
-            if epoch_number==EPOCHS-1 or (epoch_number%50==0 and epoch_number >0):
+            if epoch_number==EPOCHS-1 or (epoch_number%100==0 and epoch_number >0):
                 model_path = 'models/repr_decoder_{}_epoch_{}_{}'.format(ext_str, epoch_number, timestamp)
                 torch.save(decoder.state_dict(), model_path)
                 model_path = 'models/repr_encoder_{}_epoch_{}_{}'.format(ext_str, epoch_number, timestamp)
