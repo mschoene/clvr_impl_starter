@@ -2,7 +2,6 @@ import gym
 import numpy as np
 from general_utils import AttrDict
 from sprites_env.envs.sprites import SpritesEnv 
-#from replayBuffer import *
 from models import Oracle, CNN, MimiPPOPolicy, ImageEncoder
 from rl_utils.traj_utils import *
 from rl_utils.ppo import MimiPPO
@@ -92,6 +91,7 @@ def train(args):
     std_coef = args.std_coef
     vf_coef = args.vf_coef
     kl_target = args.kl_target
+    kl_coef=args.kl_coef
     seed = 0
 
     # Get hyperparameters from wandb.config

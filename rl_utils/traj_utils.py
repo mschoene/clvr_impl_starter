@@ -10,6 +10,7 @@ import gym
 import multiprocessing as mp
 
 
+# class to set and update the running mean reward
 class RunningMeanStd:
     def __init__(self, epsilon=1e-4, shape=()):
         self.mean = np.zeros(shape, 'float64')
@@ -41,6 +42,7 @@ class RunningMeanStd:
     def std(self):
         return np.sqrt(self.var)
 
+#instantiate
 running_mean_std = RunningMeanStd(shape=())
 
 def normalize_rewards_with_running_stats(rewards):
@@ -70,7 +72,6 @@ def collect_trajectory(seed, actor, env_name, max_steps , deterministic=False ):
     with torch.no_grad():
         actor.eval()
         for st in range(max_steps):
-            #print(seed, st )
             pos_t, done = collect_trajectory_step(actor, state, env, episode, deterministic )
             if done:
                 break 
@@ -84,11 +85,9 @@ def collect_n_trajectories(n_traj, replayBuffer, actor, env_name, n_traj_steps, 
         futures = []
         # each worker produces n_traj many different env 
         seeds = np.random.randint(0, 20000, size=n_traj)
-        #print(seeds)
         for seed in seeds: # collect bundle/vine (nworker many) traj with same starting point
         #for _ in range(n_traj):
             future = executor.submit(collect_trajectory,seed, actor, env_name, n_traj_steps  , deterministic)
-            #calc_discd_vals(future.result(), gamma, lambda_val)
             futures.append(future)
 
         for future in concurrent.futures.as_completed(futures):
@@ -126,7 +125,6 @@ def calc_discd_vals(episode, gamma, lambda_val):
     updated_episode = []
     for i in range(len(episode)):
         updated_step = episode[i]._replace(advantage=advantages[i], ret=returns[i])
-        #updated_step = episode[i]._replace(advantage=advantages[i], ret=returns[i], reward=normalized_rewards[i])
         updated_episode.append(updated_step)
 
     return updated_episode

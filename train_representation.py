@@ -160,21 +160,26 @@ def main(args):
     #decoder = load_pretrained_weights(decoder, pretrained_path)
      
 
-    # LSTM
+    # LSTM predictor
     predictor = Predictor( input_channels, output_size, batch_size , n_cond_frames=n_conditioning_frames, n_pred_frames=n_prediction_frames)
     #
     if do_seqLSTM:
+        print("doing sequential feed to lstm")
         predictor = Predictor_seq( input_channels, output_size, batch_size , n_cond_frames=n_conditioning_frames, n_pred_frames=n_prediction_frames)
+    
     # reward head(s)
     reward_predictor = RewardPredictor(n_pred_frames=n_prediction_frames, n_heads=n_heads, lstm_output_size=64)
 
     #loss_fn_decoder = nn.MSELoss()
+    # forcing a bit more white for the decoder
     loss_fn_decoder = WeightedMSELoss(weight_for_white=1.75)
 
     loss_fn_repr = nn.MSELoss()
 
+    # Decoder loss
     optimizer_deco = optim.RAdam( decoder.parameters(), betas = (0.9, 0.999), weight_decay=1e-5)
-    #optimizer = RAdam(model.parameters(), lr=0.001, weight_decay=1e-5)
+
+    # reward loss.
     if do_pretrained_enc:   # ie fixed encoder from AE
         optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()), betas=(0.9, 0.999), weight_decay=1e-5)
     else:                   # ie we train the encoder params
@@ -186,9 +191,7 @@ def main(args):
     encoder.to(device)
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
     ext_str = '{}_nDistr_{}_nCondFr_{}_doPre_{}_doSeq_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, do_seqLSTM)
-
     writer = SummaryWriter('runs/encoder_repr_trainer_{}_ts_{}'.format(ext_str, timestamp))
 
     # Trafo from rgb to grey scale img (-1,1)
@@ -259,40 +262,14 @@ def main(args):
                 dec_img = decoder(enc_img_tensor)
                 in_img_truth = label_img.reshape(-1, *label_img.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)         
                 
-                #enc_img_tensor = torch.stack(predictions, dim=1)  # Shape will be (batch_size, sequence_length, encoded_dim)
-                #enc_img_tensor = predictions  # Shape will be (batch_size, sequence_length, encoded_dim)
-                #enc_img_tensor = enc_img_tensor.clone().detach().requires_grad_(False)
-                #enc_img_tensor = enc_img_tensor.reshape(-1, *enc_img_tensor.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)         
-                #dec_img = decoder(enc_img_tensor)
-                #label_img = label_img[:, n_conditioning_frames:, ...]
-                #in_img_truth = label_img.reshape(-1, *label_img.shape[2:])  # Shape: (batch_size * sequence_length, prediction_dim)         
-
                 loss_dec = loss_fn_decoder(dec_img, in_img_truth)
 
                 if doTrain:
-
                     optimizer_deco.zero_grad()
                     loss_dec.backward()
-                    # we give the encoder some time to learn first
-                    if True : # epoch_index >  30:
-                        optimizer_deco.step()
+                    optimizer_deco.step()
 
                     counter = (epoch_index)*len(i_dataloader) + i_batch
-                    # Log gradient distributions to TensorBoard
-                    #for n, p in predictor.named_parameters():
-                    #    if p.requires_grad and ("bias" not in n):
-                    #        if p.grad is not None:
-                    #            writer.add_histogram(f'Gradients/predictor/{n}', p.grad, counter)
-                    #
-                    #for n, p in encoder.named_parameters():
-                    #    if p.requires_grad and ("bias" not in n):
-                    #        if p.grad is not None:
-                    #            writer.add_histogram(f'Gradients/encoder/{n}', p.grad, counter)
-                    #
-                    #for n, p in decoder.named_parameters():
-                    #    if p.requires_grad and ("bias" not in n):
-                    #        if p.grad is not None:
-                    #            writer.add_histogram(f'Gradients/decoder/{n}', p.grad, counter)
                     # Log reward histograms 
                     writer.add_histogram(f'Rewards/Prediction', output_rewards, counter)
                     writer.add_histogram(f'Rewards/Truth', labels_reward, counter)
@@ -307,11 +284,8 @@ def main(args):
                            
         if (epoch_index%10==0 and epoch_index >0):
             vin_img_truth_1seq= label_img[0, :n_conditioning_frames+n_prediction_frames, ...] #.squeeze(1)
-            #display = list(dec_img[ 0:n_conditioning_frames, ...]) + list(vin_img_truth_1seq)
-            #display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames)
             display = list(dec_img[ 0:n_conditioning_frames+n_prediction_frames, ...]) + list(vin_img_truth_1seq)
             display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames+n_prediction_frames)
-            #torchvision.utils.save_image(display, "models/ae_r_comp_{}_nDistr_{}_nCondFr_{}_doPre_{}_epoch_{}_{}.png".format(train_type, n_distractors, n_cond_fr, do_pretrained_enc,  epoch_index, timestamp) )
             torchvision.utils.save_image(display, "models/ae_r_comp_{}_{}_{}.png".format(ext_str, epoch_index, timestamp) )
 
         if n_heads>1:
@@ -343,10 +317,8 @@ def main(args):
             # Define training and validation data
             train_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples)
             valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=4*batch_size) #4 bachtes as validation size
-            #valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples) #4 bachtes as validation size
             if(train_type =="full"):
                 train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
-                #valid_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
                 valid_ds = MovingSpriteDataset(spec=spec, num_samples=4*batch_size)
             dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=2)
             dataloader_valid = DataLoader(valid_ds, batch_size=batch_size, num_workers=2)
