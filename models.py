@@ -256,78 +256,78 @@ class Predictor(nn.Module):
 
 # Old version without input concat
 # 
-#class Predictor(nn.Module):
-#    def __init__(self,  input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=64, n_layers_lstm=1, hidden_size=32):
-#        super(Predictor, self).__init__()
-#
-#        self.lstm_output_size = lstm_output_size
-#        self.n_layers_lstm = n_layers_lstm
-#        self.n_cond_frames = n_cond_frames
-#        self.n_pred_frames = n_pred_frames
-#        self.batch_size = batch_size
-#        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#        #self.conv_encoder = encoder # ImageEncoder(input_channels, output_size).to(self.device)
-#        #self.fc = nn.Linear(output_size*3, self.lstm_output_size)  # from embedding to lstm 1 layer
-#        self.lstm = nn.LSTM(input_size = self.lstm_output_size,
-#                            hidden_size = self.lstm_output_size, 
-#                            num_layers = self.n_layers_lstm, 
-#                            batch_first = True).to(self.device)
-#        
-#        self.mlp_enc = nn.Sequential(
-#            MLP3(output_size , output_size = self.lstm_output_size),
-#            #MLP3(output_size * n_cond_frames, output_size = self.lstm_output_size),
-#        ).to(self.device)
-#        
-#        self.lstm.apply(init_weights)
-#        self.mlp_enc.apply(init_weights)
-#
-#    def forward(self, x):
-#        #conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
-#        #merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) 
-#
-#        h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial hidden state
-#        c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial cell state
-#
-#        outputs_list = []
-#
-#        ###condition with n conditioning frames
-#        for i_step in range( self.n_cond_frames):
-#            #mlp_output = self.mlp_enc(conv_embeddings[i_step]) 
-#            mlp_output = self.mlp_enc(x[i_step]) 
-#            mlp_output = mlp_output.unsqueeze(1) 
-#            input_t = mlp_output
-#        
-#            lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
-#            #outputs_list.append(h0[-1].unsqueeze(1))
-#            #input_t = lstm_outstep
-#        
-#        #then just roll
-#        for i_step in range(self.n_pred_frames):
-#            lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
-#            outputs_list.append(h0[-1].unsqueeze(1))
-#            input_t = lstm_outstep
-#
-#        ## Loop through the total number of steps
-#        #total_steps = self.n_cond_frames + self.n_pred_frames
-#        #for i_step in range(total_steps):
-#        #    mlp_output = self.mlp_enc(x[i_step])
-#        #    mlp_output = mlp_output.unsqueeze(1)
-#        #    input_t = mlp_output
-#        #
-#        #    lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
-#        #             #
-#        #    # Append the LSTM output after the conditioning phase
-#        #    #if i_step >= self.n_cond_frames:
-#        #    outputs_list.append(lstm_outstep)
-#
-#        # Concatenate outputs along the sequence dimension
-#        #outputs = torch.cat(outputs_list, dim=1)  # Shape: (batch_size, sequence_length, lstm_hidden_dim)
-#
-#        # Concatenate predicted outputs along the sequence dimension = [nb, >ns<]
-#        outputs = torch.stack(outputs_list, dim=1).squeeze(2)
-#        return outputs
-#    
+class Predictor_seq(nn.Module):
+    def __init__(self,  input_channels, output_size, batch_size, n_cond_frames=3, n_pred_frames=25, lstm_output_size=64, n_layers_lstm=1, hidden_size=32):
+        super(Predictor_seq, self).__init__()
 
+        self.lstm_output_size = lstm_output_size
+        self.n_layers_lstm = n_layers_lstm
+        self.n_cond_frames = n_cond_frames
+        self.n_pred_frames = n_pred_frames
+        self.batch_size = batch_size
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        #self.conv_encoder = encoder # ImageEncoder(input_channels, output_size).to(self.device)
+        #self.fc = nn.Linear(output_size*3, self.lstm_output_size)  # from embedding to lstm 1 layer
+        self.lstm = nn.LSTM(input_size = self.lstm_output_size,
+                            hidden_size = self.lstm_output_size, 
+                            num_layers = self.n_layers_lstm, 
+                            batch_first = True).to(self.device)
+        
+        self.mlp_enc = nn.Sequential(
+            MLP3(output_size , output_size = self.lstm_output_size),
+            #MLP3(output_size * n_cond_frames, output_size = self.lstm_output_size),
+        ).to(self.device)
+        
+        self.lstm.apply(init_weights)
+        self.mlp_enc.apply(init_weights)
+
+    def forward(self, x):
+        #conv_embeddings =  [self.conv_encoder(x_timestep.squeeze(1)) for x_timestep in x.split(1, dim=1)]
+        #merged_embedding = torch.cat( conv_embeddings[0:self.n_cond_frames], dim=1) 
+
+        h0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial hidden state
+        c0 = torch.zeros(self.n_layers_lstm, self.batch_size, self.lstm_output_size).to(self.device) # Initial cell state
+
+        outputs_list = []
+
+        ###condition with n conditioning frames
+        for i_step in range( self.n_cond_frames):
+            #mlp_output = self.mlp_enc(conv_embeddings[i_step]) 
+            mlp_output = self.mlp_enc(x[i_step]) 
+            mlp_output = mlp_output.unsqueeze(1) 
+            input_t = mlp_output
+        
+            lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
+            #outputs_list.append(h0[-1].unsqueeze(1))
+            #input_t = lstm_outstep
+        
+        #then just roll
+        for i_step in range(self.n_pred_frames):
+            lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
+            outputs_list.append(h0[-1].unsqueeze(1))
+            input_t = lstm_outstep
+
+        ## Loop through the total number of steps
+        #total_steps = self.n_cond_frames + self.n_pred_frames
+        #for i_step in range(total_steps):
+        #    mlp_output = self.mlp_enc(x[i_step])
+        #    mlp_output = mlp_output.unsqueeze(1)
+        #    input_t = mlp_output
+        #
+        #    lstm_outstep, (h0, c0) = self.lstm(input_t, (h0, c0))
+        #             #
+        #    # Append the LSTM output after the conditioning phase
+        #    #if i_step >= self.n_cond_frames:
+        #    outputs_list.append(lstm_outstep)
+
+        # Concatenate outputs along the sequence dimension
+        #outputs = torch.cat(outputs_list, dim=1)  # Shape: (batch_size, sequence_length, lstm_hidden_dim)
+
+        # Concatenate predicted outputs along the sequence dimension = [nb, >ns<]
+        outputs = torch.stack(outputs_list, dim=1).squeeze(2)
+        return outputs
+    
+    
 ###############################################################
 ### MLP heads for reward prediction  ###
 ###############################################################

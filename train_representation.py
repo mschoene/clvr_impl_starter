@@ -28,7 +28,7 @@ from torchsummary import summary
 
 import torch.optim as optim
 
-from models import ImageEncoder, ImageDecoder, RewardPredictor, Predictor
+from models import ImageEncoder, ImageDecoder, RewardPredictor, Predictor, Predictor_seq
 
 #from torchvision import transform, transforms
 from torchvision.transforms import v2
@@ -76,6 +76,7 @@ def main(args):
     n_distractors = args.n_distractors
     do_pretrained_enc = args.do_pre_enc
     n_cond_fr = args.n_cond_frames
+    do_seqLSTM = args.do_seq
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -161,6 +162,9 @@ def main(args):
 
     # LSTM
     predictor = Predictor( input_channels, output_size, batch_size , n_cond_frames=n_conditioning_frames, n_pred_frames=n_prediction_frames)
+    #
+    if do_seqLSTM:
+        predictor = Predictor_seq( input_channels, output_size, batch_size , n_cond_frames=n_conditioning_frames, n_pred_frames=n_prediction_frames)
     # reward head(s)
     reward_predictor = RewardPredictor(n_pred_frames=n_prediction_frames, n_heads=n_heads, lstm_output_size=64)
 
@@ -182,7 +186,10 @@ def main(args):
     encoder.to(device)
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    writer = SummaryWriter('runs/encoder_repr_trainer__{}_nDistr_{}_nCondFr_{}_doPre_{}_model_epoch_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, timestamp))
+
+    ext_str = '{}_nDistr_{}_nCondFr_{}_doPre_{}_doSeq_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, do_seqLSTM)
+
+    writer = SummaryWriter('runs/encoder_repr_trainer_{}_ts_{}'.format(ext_str, timestamp))
 
     # Trafo from rgb to grey scale img (-1,1)
     trafo = v2.Compose([v2.Grayscale(num_output_channels=1)])
@@ -304,7 +311,8 @@ def main(args):
             #display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames)
             display = list(dec_img[ 0:n_conditioning_frames+n_prediction_frames, ...]) + list(vin_img_truth_1seq)
             display = torchvision.utils.make_grid(display,nrow=n_conditioning_frames+n_prediction_frames)
-            torchvision.utils.save_image(display, "models/ae_r_comp_{}_nDistr_{}_nCondFr_{}_doPre_{}_epoch_{}_{}.png".format(train_type, n_distractors, n_cond_fr, do_pretrained_enc,  epoch_index, timestamp) )
+            #torchvision.utils.save_image(display, "models/ae_r_comp_{}_nDistr_{}_nCondFr_{}_doPre_{}_epoch_{}_{}.png".format(train_type, n_distractors, n_cond_fr, do_pretrained_enc,  epoch_index, timestamp) )
+            torchvision.utils.save_image(display, "models/ae_r_comp_{}_{}_{}.png".format(ext_str, epoch_index, timestamp) )
 
         if n_heads>1:
             avg_head_losses = [total_loss / len(i_dataloader) for total_loss in total_head_losses]
@@ -376,11 +384,11 @@ def main(args):
             # Track best performance, and save the model's state
             #if (avg_vloss < best_vloss*0.5 and avg_vloss<0.008) or epoch_number==EPOCHS-1:
             if epoch_number==EPOCHS-1 or (epoch_number%50==0 and epoch_number >0):
-                model_path = 'models/repr_decoder_{}_nDistr_{}_nCondFr_{}_doPre_{}_model_epoch_{}_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, epoch_number, timestamp)
+                model_path = 'models/repr_decoder_{}_epoch_{}_{}'.format(ext_str, epoch_number, timestamp)
                 torch.save(decoder.state_dict(), model_path)
-                model_path = 'models/repr_encoder_{}_nDistr_{}_nCondFr_{}_doPre_{}_model_epoch_{}_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, epoch_number, timestamp)
+                model_path = 'models/repr_encoder_{}_epoch_{}_{}'.format(ext_str, epoch_number, timestamp)
                 torch.save(encoder.state_dict(), model_path)                
-                model_path = 'models/repr_lstm_{}_nDistr_{}_nCondFr_{}_doPre_{}_model_epoch_{}_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, epoch_number, timestamp)
+                model_path = 'models/repr_lstm_{}_epoch_{}_{}'.format(ext_str, epoch_number, timestamp)
                 torch.save(encoder.state_dict(), model_path)
 
             #if  avg_vloss < 0.00001:
@@ -398,8 +406,8 @@ if __name__ == "__main__":
     parser.add_argument('--n_epochs', type=int, default=501, help="Number of training epochs to run, default 500.")
     parser.add_argument('--n_distractors', type=int, default=0, help="Number of distractors, default 0.")
     parser.add_argument('--do_pre_enc', type=int, default=0, help="Use pretrained encoder")
+    parser.add_argument('--do_seq', type=int, default=0, help="Do sequential lstm")
     parser.add_argument('--n_cond_frames', type=int, default=3, help="Number of preconditioning frames")
-
 
     args = parser.parse_args()
 
