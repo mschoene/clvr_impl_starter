@@ -53,6 +53,22 @@ def conditional_no_grad(condition):
         yield
 
 
+import torch
+import torch.nn as nn
+
+class WeightedMSELoss(nn.Module):
+    def __init__(self, weight_for_white=10.0):
+        super(WeightedMSELoss, self).__init__()
+        self.weight_for_white = weight_for_white  # Weight for white pixels
+
+    def forward(self, input, target):
+        # Create weights: higher weight for white pixels
+        weights = torch.ones_like(target) + target * (self.weight_for_white - 1)
+        squared_error = (input - target) ** 2
+        weighted_squared_error = squared_error * weights
+        return weighted_squared_error.mean()
+
+
 def main(args):
 
     train_type = args.type 
@@ -98,8 +114,8 @@ def main(args):
 
     n_conditioning_frames = n_cond_fr #3 #10 #0# 10 #3 #10 #3
     n_prediction_frames = spec['max_seq_len'] - n_conditioning_frames #25 
-    batch_size = 32 # 16 #64 # 32 #128 #16 # 32 #64 #32 #128 # 64 #128 #64
-    n_batches = 16 #20 #20 #100
+    batch_size = 32 
+    n_batches = 16 
     n_samples = batch_size*n_batches
 
     input_channels = 1 # 3 but we transform images to grey scale first
@@ -148,15 +164,17 @@ def main(args):
     # reward head(s)
     reward_predictor = RewardPredictor(n_pred_frames=n_prediction_frames, n_heads=n_heads, lstm_output_size=64)
 
-    loss_fn_decoder = nn.MSELoss()
+    #loss_fn_decoder = nn.MSELoss()
+    loss_fn_decoder = WeightedMSELoss(weight_for_white=1.75)
+
     loss_fn_repr = nn.MSELoss()
 
-    optimizer_deco = optim.RAdam( decoder.parameters(), betas = (0.9, 0.999))
-
+    optimizer_deco = optim.RAdam( decoder.parameters(), betas = (0.9, 0.999), weight_decay=1e-5)
+    #optimizer = RAdam(model.parameters(), lr=0.001, weight_decay=1e-5)
     if do_pretrained_enc:   # ie fixed encoder from AE
-        optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()), betas=(0.9, 0.999))
+        optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()), betas=(0.9, 0.999), weight_decay=1e-5)
     else:                   # ie we train the encoder params
-        optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()) + list(encoder.parameters()), betas=(0.9, 0.999))
+        optimizer_repr = optim.RAdam(list(predictor.parameters()) + list(reward_predictor.parameters()) + list(encoder.parameters()), betas=(0.9, 0.999), weight_decay=1e-5)
 
     predictor.to(device)
     reward_predictor.to(device)
@@ -167,7 +185,7 @@ def main(args):
     writer = SummaryWriter('runs/encoder_repr_trainer__{}_nDistr_{}_nCondFr_{}_doPre_{}_model_epoch_{}'.format(train_type, n_distractors, n_cond_fr, do_pretrained_enc, timestamp))
 
     # Trafo from rgb to grey scale img (-1,1)
-    trafo = v2.Compose([v2.Grayscale(num_output_channels=1) ])
+    trafo = v2.Compose([v2.Grayscale(num_output_channels=1)])
 
 
 
@@ -316,10 +334,12 @@ def main(args):
 
             # Define training and validation data
             train_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples)
-            valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples) #4 bachtes as validation size
+            valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=4*batch_size) #4 bachtes as validation size
+            #valid_ds = MovingSpriteDataset_DistractorOnly(spec=spec, num_samples=n_samples) #4 bachtes as validation size
             if(train_type =="full"):
                 train_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
-                valid_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
+                #valid_ds = MovingSpriteDataset(spec=spec, num_samples=n_samples)
+                valid_ds = MovingSpriteDataset(spec=spec, num_samples=4*batch_size)
             dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=2)
             dataloader_valid = DataLoader(valid_ds, batch_size=batch_size, num_workers=2)
         
