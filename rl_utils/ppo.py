@@ -200,7 +200,6 @@ class MimiPPO:
             if (len(self.replayBuffer) == self.buffer_size):
                 counter += int ( (self.buffer_size)/self.off_poli_factor  )
 
-
             data = NpDataset([ele for ele in self.replayBuffer])
 
             if self.device.type == 'cuda':
@@ -304,6 +303,12 @@ class MimiPPO:
 
                     eval_reward = 0
                     if self.do_eval:
+
+                        #if self.device.type == 'cuda':
+                        #    self.model.to(self.device)
+                        # data.to(self.device)
+                        self.model = self.model.to('cpu') 
+
                         collect_n_trajectories(self.n_trajectories, self.replayBuffer_eval, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=1, deterministic=True)
                         #collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=1)
                         
