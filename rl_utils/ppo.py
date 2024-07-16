@@ -228,8 +228,8 @@ class MimiPPO:
                     if self.verbose:
                         rewards_for_log = []
 
-                    #if self.device.type == 'cuda':
-                    #   self.model.to(self.device)
+                    if self.device.type == 'cuda':
+                        self.model.to(self.device)
                     #   data.to(self.device)
 
                     dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True)
