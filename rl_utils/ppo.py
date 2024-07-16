@@ -202,11 +202,17 @@ class MimiPPO:
 
 
             data = NpDataset([ele for ele in self.replayBuffer])
+
+            if self.device.type == 'cuda':
+                self.model.to(self.device)
+                data.to(self.device)
             # if we got evaluation data make use of it by appending it to the training data
             if self.do_eval:
                 data_eval = NpDataset([ele for ele in self.replayBuffer_eval])
+                if self.device.type == 'cuda':
+                    data_eval.to(self.device)
                 data += data_eval
-                counter +=  (self.buffer_size_eval)
+                counter += (self.buffer_size_eval)
 
             if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
                 for i_epoch in range(self.n_epochs):   
@@ -223,9 +229,9 @@ class MimiPPO:
                     if self.verbose:
                         rewards_for_log = []
 
-                    if self.device.type == 'cuda':
-                       self.model.to(self.device)
-                       data.to(self.device)
+                    #if self.device.type == 'cuda':
+                    #   self.model.to(self.device)
+                    #   data.to(self.device)
 
                     dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True)
                     
@@ -234,7 +240,9 @@ class MimiPPO:
                     current_epsilon = anneal_clip_range(self.epsilon ,  self.final_eps, counter, self.max_env_steps)
 
                     for _, sample_batched in enumerate(dataloader):
-
+                        
+                        #sample_batched = tuple(item.to(self.device) for item in sample_batched)
+                        #sample_batched = sample_batched.to(self.device)
                         pos_t_batched, actions_batched, action_probas_old_batched, \
                             advantage_batched, return_batched, reward_batched, value_batched \
                                 = extract_values_from_batch(sample_batched, self.minibatch_size)

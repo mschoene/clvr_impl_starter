@@ -226,9 +226,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train MimiPPO model with specified parameters.")
-    parser.add_argument('--n_epochs', type=int, default=151, help="Number of training epochs to run, default 500.")
+    parser.add_argument('--n_epochs', type=int, default=251, help="Number of training epochs to run, default 500.")
     parser.add_argument('--n_distractors', type=int, default=0, help="Number of distractors, default 0.")
-   
 
 
     args = parser.parse_args()
