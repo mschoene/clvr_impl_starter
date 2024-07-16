@@ -157,11 +157,11 @@ def train(args):
 
     elif model_name == "repr": # pretrained representation encoder
         if args.n_distractors == 0:
-            pretrained_path = "models/repr_encoder_full_nDistr_0_doPre_0_model_epoch_500_20240708_152431"
+            pretrained_path = "models/repr_encoder_full_nDistr_0_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240715_115759" #"models/repr_encoder_full_nDistr_0_doPre_0_model_epoch_500_20240708_152431"
         elif args.n_distractors ==1:
-            pretrained_path = "models/repr_encoder_full_nDistr_1_doPre_0_model_epoch_500_20240709_002237"
+            pretrained_path = "models/repr_encoder_full_nDistr_1_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240715_160245" #"models/repr_encoder_full_nDistr_1_doPre_0_model_epoch_500_20240709_002237"
         elif args.n_distractors ==2:
-            pretrained_path = "models/repr_encoder_full_nDistr_2_doPre_0_model_epoch_500_20240709_020827"
+            pretrained_path = "models/repr_encoder_full_nDistr_2_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240715_160400" #"models/repr_encoder_full_nDistr_2_doPre_0_model_epoch_500_20240709_020827"
         else:
             pretrained_path = "models/repr_encoder_full_nDistr_3_doPre_0_model_epoch_500_20240709_033751"
         encoder = ImageEncoder(1, 64)
@@ -171,11 +171,11 @@ def train(args):
 
     elif model_name =="repr_ft": #pretrained representation encoder, fine tuning
         if args.n_distractors == 0:
-            pretrained_path = "models/repr_encoder_full_nDistr_0_doPre_0_model_epoch_500_20240708_152431"
+            pretrained_path = "models/repr_encoder_full_nDistr_0_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240715_115759" #"models/repr_encoder_full_nDistr_0_doPre_0_model_epoch_500_20240708_152431"
         elif args.n_distractors ==1:
-            pretrained_path = "models/repr_encoder_full_nDistr_1_doPre_0_model_epoch_500_20240709_002237"
+            pretrained_path = "models/repr_encoder_full_nDistr_1_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240715_160245" #"models/repr_encoder_full_nDistr_1_doPre_0_model_epoch_500_20240709_002237"
         elif args.n_distractors ==2:
-            pretrained_path = "models/repr_encoder_full_nDistr_2_doPre_0_model_epoch_500_20240709_020827"
+            pretrained_path = "models/repr_encoder_full_nDistr_2_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240715_160400" #"models/repr_encoder_full_nDistr_2_doPre_0_model_epoch_500_20240709_020827"
         else:
             pretrained_path = "models/repr_encoder_full_nDistr_3_doPre_0_model_epoch_500_20240709_033751"
         encoder = ImageEncoder(1, 64)
