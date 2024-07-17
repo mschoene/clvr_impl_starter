@@ -332,7 +332,6 @@ class MimiPPO:
                                     print(f"Parameter {name} has NaN gradients.")
                                     param.grad.zero_()  # This will reset the gradients for this parameter
 
-
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm = self.max_grad_norm )
                         self.optimizer.step()
 
