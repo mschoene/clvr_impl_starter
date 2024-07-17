@@ -133,22 +133,22 @@ def train(args):
 
     elif model_name =="enc": #pretrained encoder, frozen
         if args.n_distractors==0:
-            pretrained_path = "models/encoder_model_2obj_20240708_223549_149"
+            pretrained_path = "models/encoder_model_2obj_nDistr_0_20240716_133405_300" #models/encoder_model_2obj_20240708_223549_149"
         elif args.n_distractors==1:
-            pretrained_path = "models/encoder_model_2obj_nDistr_1_20240709_134803_150"
+            pretrained_path = "models/encoder_model_2obj_nDistr_1_20240716_133830_300" #models/encoder_model_2obj_nDistr_1_20240709_134803_150"
         else:
-            pretrained_path = "models/encoder_model_2obj_nDistr_2_20240709_165324_150" 
+            pretrained_path = "models/encoder_model_2obj_nDistr_2_20240716_153621_300" #models/encoder_model_2obj_nDistr_2_20240709_165324_150" 
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
         set_parameter_requires_grad(encoder, requires_grad=False)
     elif model_name =="enc_ft": #pretrained encoder, fine tuning
         if args.n_distractors==0:
-            pretrained_path = "models/encoder_model_2obj_20240708_223549_149"
+            pretrained_path = "models/encoder_model_2obj_nDistr_0_20240716_133405_300" #models/encoder_model_2obj_20240708_223549_149"
         elif args.n_distractors==1:
-            pretrained_path = "models/encoder_model_2obj_nDistr_1_20240709_134803_150"
+            pretrained_path = "models/encoder_model_2obj_nDistr_1_20240716_133830_300" #models/encoder_model_2obj_nDistr_1_20240709_134803_150"
         else:
-            pretrained_path = "models/encoder_model_2obj_nDistr_2_20240709_165324_150"
+            pretrained_path = "models/encoder_model_2obj_nDistr_2_20240716_153621_300" #models/encoder_model_2obj_nDistr_2_20240709_165324_150" 
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
