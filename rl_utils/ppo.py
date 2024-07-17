@@ -284,6 +284,12 @@ class MimiPPO:
                         # total loss 
                         total_loss = self.vf_coef * value_loss + action_loss + log_std_penalty_loss + self.ent_coef * entropy_loss + self.kl_coef * kl_loss
 
+
+                        # Check for NaNs in the forward pass
+                        if torch.isnan(action_probas_prop).any() or torch.isnan(value_prop).any() or torch.isnan(entropy_prop).any():
+                            print("NaNs detected in the forward pass")
+                            continue
+                        
                         self.optimizer.zero_grad()
                         total_loss.mean().backward()
 
