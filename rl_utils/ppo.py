@@ -25,6 +25,8 @@ import wandb
 import matplotlib.pyplot as plt
 import os
 
+torch.autograd.set_detect_anomaly(True)
+
 # Define checkpoints, save every 1M env steps
 checkpoints = [1_000_000, 2_000_000, 3_000_000, 4_000_000]
 
