@@ -287,6 +287,11 @@ class MimiPPO:
                         self.optimizer.zero_grad()
                         total_loss.mean().backward()
 
+                        # Check for NaNs in the gradients
+                        for name, param in self.model.named_parameters():
+                            if param.requires_grad and torch.isnan(param.grad).any():
+                                print(f"NaNs detected in gradients of {name}")
+
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm = self.max_grad_norm )
                         self.optimizer.step()
 
