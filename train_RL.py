@@ -93,6 +93,8 @@ def train(args):
     kl_target = args.kl_target
     kl_coef=args.kl_coef
     seed = 0
+    enc_no_grad=False
+
 
     # Get hyperparameters from wandb.config
     if args.do_sweep:
@@ -142,6 +144,8 @@ def train(args):
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
         set_parameter_requires_grad(encoder, requires_grad=False)
+        enc_no_grad=True
+
     elif model_name =="enc_ft": #pretrained encoder, fine tuning
         if args.n_distractors==0:
             pretrained_path = "models/encoder_model_2obj_nDistr_0_20240716_133405_300" #models/encoder_model_2obj_20240708_223549_149"
@@ -168,6 +172,8 @@ def train(args):
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
         set_parameter_requires_grad(encoder, requires_grad=False)
+        enc_no_grad=True
+
 
     elif model_name =="repr_ft": #pretrained representation encoder, fine tuning
         if args.n_distractors == 0:
@@ -197,7 +203,8 @@ def train(args):
                           encoder_output_size = policy_input_dim,
                           separate_layers = separate_ac_mlps,
                           hidden_layer_dim = ac_hidden_size,
-                          num_hidden_layers = ac_hidden_layers
+                          num_hidden_layers = ac_hidden_layers,
+                          enc_no_grad = enc_no_grad
                           )
     ppo_trainer = MimiPPO(model, 
                           model_name, 

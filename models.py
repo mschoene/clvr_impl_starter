@@ -8,8 +8,9 @@ from torch.distributions import MultivariateNormal
 ###############################################################
 def init_weights(m):
     if isinstance(m, nn.Linear):
-        torch.nn.init.orthogonal_(m.weight)
-        m.bias.data.fill_(0.01)
+        nn.init.orthogonal_(m.weight)
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0.03)
     elif isinstance(m, nn.Conv2d):
         torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
         if m.bias is not None:
@@ -34,10 +35,12 @@ class MLP(nn.Module):
         layers = []
         # Input layer
         layers.append(nn.Linear(input_dim, hidden_size))
+        #layers.append(nn.Tanh())
         layers.append(nn.ReLU())
         # Hidden layers
         for _ in range(num_layers - 1):
             layers.append(nn.Linear(hidden_size, hidden_size))
+            #layers.append(nn.Tanh())
             layers.append(nn.ReLU())
         # Output layer
         layers.append(nn.Linear(hidden_size, output_dim))
@@ -45,8 +48,35 @@ class MLP(nn.Module):
         if do_final_activ:
             layers.append(nn.ReLU())
         self.network = nn.Sequential(*layers)
+
     def forward(self, x):
         return self.network(x)
+        #for i, layer in enumerate(self.network):
+        #    x = layer(x)
+        #    #if i == 4:  # Layer 4 (last layer in this case)
+        #        #print(f"Layer {i} input: {x}")
+        #        #if isinstance(layer, nn.Linear):
+        #            #print(f"Layer {i} weights: {layer.weight}")
+        #            #print(f"Layer {i} bias: {layer.bias}")
+        #    if torch.isnan(x).any():
+        #        raise ValueError(f"NaN detected in MLP after layer {i} ({layer}): {x}")
+        #    x = torch.clamp(x, -1e5, 1e5)  # Prevent overflow
+#
+        #return x
+    
+    #def forward(self, x):
+    #    if torch.isnan(x).any():
+    #            raise ValueError(f"NaN detected in MLP before layer {layer}: {x}")
+    #    for i, layer in enumerate(self.network):
+    #        x = layer(x)
+    #        if torch.isnan(x).any():
+    #            raise ValueError(f"NaN detected in MLP after layer {i} ({layer}): {x}")
+    #    return x
+    #def forward(self, x):   
+    #    if torch.isnan(x).any():
+    #        raise ValueError(f"NaN detected in mlp input: {x}")#
+    #
+    #    return self.network(x)
     
 ############################################################### #TODO refactor in favor of the more general model above
 ### Three layer MLP, takes an input, output and hidden size ###
@@ -420,7 +450,7 @@ class CNN(nn.Module):
 ### Policy maker: given an encoder make it into a MimiPPOP  ###
 ###############################################################
 class MimiPPOPolicy(nn.Module):
-    def __init__(self, enc, obs_dim, action_space, action_std_init, encoder_output_size= 64, separate_layers=0, hidden_layer_dim = 32, num_hidden_layers=2, gradStd=False):
+    def __init__(self, enc, obs_dim, action_space, action_std_init, encoder_output_size= 64, separate_layers=0, hidden_layer_dim = 32, num_hidden_layers=2, enc_no_grad=False, gradStd=False):
         super(MimiPPOPolicy, self).__init__()
 
         self.encoder = enc
@@ -429,6 +459,7 @@ class MimiPPOPolicy(nn.Module):
         self.separate_layers = separate_layers
         self.hidden_layer_dim = hidden_layer_dim
         self.num_hidden_layers = num_hidden_layers
+        self.enc_no_grad = enc_no_grad
         #self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=False ) #True)
         #self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=True)
         self.action_std = nn.Parameter(torch.ones(self.action_dim) * action_std_init, requires_grad=gradStd)
@@ -437,17 +468,26 @@ class MimiPPOPolicy(nn.Module):
         self.critic_layers = nn.Sequential( nn.Linear(self.hidden_layer_dim, 1) )
         self.actor_layers = nn.Sequential( nn.Linear(self.hidden_layer_dim, self.action_dim), nn.Tanh())
         if separate_layers:
-            self.actor_layers = nn.Sequential(MLP(self.encoder_output_size , self.action_dim, self.hidden_layer_dim, self.num_hidden_layers ),  nn.Tanh())
-            self.critic_layers = nn.Sequential(MLP(self.encoder_output_size , 1, self.hidden_layer_dim, self.num_hidden_layers ))
+            self.actor_layers = nn.Sequential(MLP(self.encoder_output_size, self.action_dim, self.hidden_layer_dim, self.num_hidden_layers ),  nn.Tanh())
+            self.critic_layers = nn.Sequential(MLP(self.encoder_output_size, 1, self.hidden_layer_dim, self.num_hidden_layers ))
 
         self.shared_layers.apply(init_weights)
         self.actor_layers.apply(init_weights)
         self.critic_layers.apply(init_weights)
 
     def forward(self, x):
-        x = self.encoder(x)
+
+        if self.enc_no_grad:
+            with torch.no_grad():
+                x = self.encoder(x)
+        else:
+            x = self.encoder(x)
+
         if not self.separate_layers: #if joint layers do them
             x = self.shared_layers(x)
+
+        if torch.isnan(x).any():
+            print("Input x tensor contains NaNs!")
         value = self.critic_layers(x)
         actor_output = self.actor_layers(x)
 
@@ -458,8 +498,13 @@ class MimiPPOPolicy(nn.Module):
         above_threshold = ( torch.log1p(safe_log_std) + 1.0) * (self.action_std > 0)
         std = below_threshold + above_threshold
         
+        #simpler since fixed std
+        #std = torch.exp(self.action_std)
         action_cov = torch.diag(std)
+        #print("Covariance Matrix:", action_cov, std.shape, actor_output.shape)
         #action_cov = torch.diag(self.action_std)
+        if torch.isnan(actor_output).any():
+            print("Input tensor actor_out contains NaNs!")
         dist = MultivariateNormal(actor_output, action_cov)
         return dist, value
     
