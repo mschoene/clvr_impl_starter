@@ -160,10 +160,11 @@ class MimiPPO:
         all_params = set(self.model.parameters())
         rest_params = all_params - encoder_params
         self.optimizer = optim.Adam([
-            {'params': model.encoder.parameters(), 'lr': self.lr},
-            {'params': list(rest_params), 'lr': self.lr_enc}
+            {'params': model.encoder.parameters(), 'lr': self.lr, 'weight_decay': 1e-5},
+            {'params': list(rest_params), 'lr': self.lr_enc, 'weight_decay': 1e-5}
             ], eps=1e-4)
         
+           # {'params': list(rest_params), 'lr': self.lr_enc, 'weight_decay': 1e-5}
         #self.optimizer = optim.RAdam( self.model.parameters(), betas = (0.9, 0.999))
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 1500, min_lr = 1e-5 )
 
