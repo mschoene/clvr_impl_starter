@@ -23,7 +23,19 @@ from rl_utils.buffer import *
 
 import wandb
 import matplotlib.pyplot as plt
+import os
 
+# Define checkpoints, save every 1M env steps
+checkpoints = [1_000_000, 2_000_000, 3_000_000, 4_000_000]
+
+# save checkpoint
+def save_checkpoint(model, counter, optimizer, filename):
+    checkpoint = {
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'counter': counter
+    }
+    torch.save(checkpoint, filename)
 
 def adjust_kl_coeff(kl_div, kl_coeff, kl_target, beta=2.0):
     if kl_div > kl_target:
@@ -103,6 +115,7 @@ class MimiPPO:
                 verbose = False,
                 do_eval = True, #do deterministic eval step 
                 final_eps = 0.0001,
+                prev_train_path = None
 
             ): #this is not a sad smiley but a very hungry duck
 
@@ -175,14 +188,30 @@ class MimiPPO:
         self.do_vf_clip = do_vf_clip
         self.do_lin_lr_decay = do_lin_lr_decay
         self.verbose = verbose
+        self.counter = 0
         
+        if prev_train_path:
+               self.counter = self.load_checkpoint(prev_train_path)
+
+    def load_checkpoint(self, filename):
+        if os.path.isfile(filename):
+            print(f"=> loading checkpoint '{filename}'")
+            checkpoint = torch.load(filename)
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            counter = checkpoint['counter']
+            print(f"=> loaded checkpoint '{filename}' (counter {counter})")
+            return counter
+        else:
+            print(f"=> no checkpoint found at '{filename}'")
+            return 0         
 
 
     
     def train(self):
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
-        counter = 0. #this counts the number of environment steps in total
+        counter = self.counter #this counts the number of environment steps in total
         next_threshold = 10000 #you get a log printout every next_threshold step
 
         while(counter < self.max_env_steps):
@@ -286,17 +315,21 @@ class MimiPPO:
 
 
                         # Check for NaNs in the forward pass
-                        if torch.isnan(action_probas_prop).any() or torch.isnan(value_prop).any() or torch.isnan(entropy_prop).any():
-                            print("NaNs detected in the forward pass")
-                            continue
+                        #if torch.isnan(action_probas_prop).any() or torch.isnan(value_prop).any() or torch.isnan(entropy_prop).any():
+                        #    print("NaNs detected in the forward pass")
+                        #    continue
                         
                         self.optimizer.zero_grad()
                         total_loss.mean().backward()
 
-                        # Check for NaNs in the gradients
                         for name, param in self.model.named_parameters():
-                            if param.requires_grad and torch.isnan(param.grad).any():
-                                print(f"NaNs detected in gradients of {name}")
+                            if param.requires_grad:
+                                if param.grad is None:
+                                    print(f"Parameter {name} has no gradient.")
+                                elif torch.isnan(param.grad).any():
+                                    print(f"Parameter {name} has NaN gradients.")
+                                    param.grad.zero_()  # This will reset the gradients for this parameter
+
 
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm = self.max_grad_norm )
                         self.optimizer.step()
@@ -402,6 +435,13 @@ class MimiPPO:
 
                 if self.do_lin_lr_decay:
                     update_linear_schedule(self.optimizer, counter, self.max_env_steps, [self.lr, self.lr_enc])
+                
+                # save a checkpoint ever 1M steps
+                for checkpoint in checkpoints:
+                    if counter >= checkpoint and (counter - int((checkpoint - 1) / 10_000)) < 10_000:
+                        checkpoint_path = 'runs/checkpoint_{}_{}_{}.pth'.format(checkpoint // 1_000_000, self.model_name, self.timestamp)
+                        save_checkpoint(self.model, counter, self.optimizer, checkpoint_path)
+
 
 
         print("DONE " , self.max_env_steps , " steps")
