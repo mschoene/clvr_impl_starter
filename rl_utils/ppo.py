@@ -325,7 +325,7 @@ class MimiPPO:
                         for name, param in self.model.named_parameters():
                             if param.requires_grad:
                                 if param.grad is None:
-                                    print(f"Parameter {name} has no gradient.")
+                                    pass #print(f"Parameter {name} has no gradient.")
                                 elif torch.isnan(param.grad).any():
                                     print(f"Parameter {name} has NaN gradients.")
                                     param.grad.zero_()  # This will reset the gradients for this parameter
