@@ -39,12 +39,20 @@ def save_checkpoint(model, counter, optimizer, filename):
     }
     torch.save(checkpoint, filename)
 
-def adjust_kl_coeff(kl_div, kl_coeff, kl_target, beta=2.0):
-    if kl_div > kl_target:
-        kl_coeff *= beta
-    else:
-        kl_coeff /= beta
+#without clipping it is too sensitive and results in unsable behavior
+def adjust_kl_coeff(kl_divergence, kl_coeff, target_kl, kl_increment=2.0, kl_decrement=0.5, kl_min=1e-5, kl_max=10):
+    if kl_divergence > target_kl * 1.5:
+        kl_coeff = min(kl_coeff * kl_increment, kl_max)
+    elif kl_divergence < target_kl / 1.5:
+        kl_coeff = max(kl_coeff * kl_decrement, kl_min)
     return kl_coeff
+#
+#def adjust_kl_coeff(kl_div, kl_coeff, kl_target, beta=2.0):
+#    if kl_div > kl_target:
+#        kl_coeff *= beta
+#    else:
+#        kl_coeff /= beta
+#    return kl_coeff
 
 def anneal_clip_range(initial_clip_range, final_clip_range, current_step, total_steps):
     """
@@ -159,7 +167,7 @@ class MimiPPO:
         self.minibatch_size = minibatch_size # size of the batch to average over 
         self.replayBuffer = ReplayBuffer(self.buffer_size)
         
-        self.buffer_size_eval = int(  (self.n_traj_steps)*self.n_trajectories ) # M = N*T thus defining the number of actors as N = M/T
+        self.buffer_size_eval = int((self.n_traj_steps)*self.n_trajectories ) 
         self.replayBuffer_eval = ReplayBuffer(self.buffer_size_eval)
 
         self.lr = lr
@@ -272,15 +280,12 @@ class MimiPPO:
 
                     for _, sample_batched in enumerate(dataloader):
                         
-                        #sample_batched = tuple(item.to(self.device) for item in sample_batched)
-                        #sample_batched = sample_batched.to(self.device)
                         pos_t_batched, actions_batched, action_probas_old_batched, \
                             advantage_batched, return_batched, reward_batched, value_batched \
                                 = extract_values_from_batch(sample_batched, self.minibatch_size)
                         
                         if(self.do_adv_norm):
                             advantage_batched = get_averaged_tensor(advantage_batched)
-                            #return_batched = get_averaged_tensor(return_batched)
 
                         #evaluate state action:
                         action_probas_prop, value_prop, entropy_prop = self.model.evaluate(pos_t_batched, actions_batched)
@@ -308,18 +313,18 @@ class MimiPPO:
                         kl_loss = (action_probas_old_batched - action_probas_prop).mean()
 
                         self.kl_coef = adjust_kl_coeff(kl_loss, self.kl_coef, self.kl_target)
-
-                        #to keep it from exploding and just going random/max action rather than trying to predict the correct mean
-                        log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() * ( counter / self.max_env_steps )
+                        #print("kl coef", self.kl_coef)
+                        #to encourange shrinking of the std dev if it's left as a learnable param
+                        #log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() * ( counter / self.max_env_steps )
 
                         # total loss 
-                        total_loss = self.vf_coef * value_loss + action_loss + log_std_penalty_loss + self.ent_coef * entropy_loss + self.kl_coef * kl_loss
+                        total_loss = self.vf_coef * value_loss + action_loss + self.ent_coef * entropy_loss + self.kl_coef * kl_loss #+ log_std_penalty_loss 
 
 
                         # Check for NaNs in the forward pass
-                        #if torch.isnan(action_probas_prop).any() or torch.isnan(value_prop).any() or torch.isnan(entropy_prop).any():
-                        #    print("NaNs detected in the forward pass")
-                        #    continue
+                        if torch.isnan(action_probas_prop).any() or torch.isnan(value_prop).any() or torch.isnan(entropy_prop).any():
+                            print("NaNs detected in the forward pass")
+                            continue
                         
                         self.optimizer.zero_grad()
                         total_loss.mean().backward()
@@ -356,23 +361,18 @@ class MimiPPO:
                         self.model = self.model.to('cpu') 
 
                         collect_n_trajectories(self.n_trajectories, self.replayBuffer_eval, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=1, deterministic=True)
-                        #collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=1)
-                        
-                        #n_exp = self.n_trajectories * self.n_traj_steps
-
-                        #last_n_experiences = self.replayBuffer.get_last_n_experiences(n_exp)
-                        #dataloader_eval = DataLoader(last_n_experiences, batch_size=n_exp, collate_fn=my_collate_fn)
                         data_eval = NpDataset([ele for ele in self.replayBuffer_eval])
 
                         dataloader_eval = DataLoader(data_eval, batch_size=len(self.replayBuffer_eval), collate_fn=my_collate_fn)
 
-                        self.model.eval()
+                        #self.model.eval()
                         for _, sample_batched in enumerate(dataloader_eval):
 
-                            pos_t_batched, actions_batched, action_probas_old_batched, \
-                                advantage_batched, return_batched, reward_batched, value_batched \
+                            pos_t_batched_eval, actions_batched_eval, action_probas_old_batched_eval, \
+                                advantage_batched_eval, return_batched_eval, reward_batched_eval, value_batched_eval \
                                     = extract_values_from_batch(sample_batched, len(self.replayBuffer_eval) )
-                            eval_reward=reward_batched.mean().cpu().numpy()
+                            eval_reward=reward_batched_eval.mean().cpu().numpy()
+                        #self.model.train()
 
                     # log last avg epoch results
                     if( i_epoch % (self.n_epochs-1)==0 and i_epoch>0): 

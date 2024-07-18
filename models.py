@@ -477,11 +477,11 @@ class MimiPPOPolicy(nn.Module):
 
     def forward(self, x):
 
-        if self.enc_no_grad:
-            with torch.no_grad():
-                x = self.encoder(x)
-        else:
-            x = self.encoder(x)
+        #if self.enc_no_grad:
+        #    with torch.no_grad():
+        x = self.encoder(x)
+        #else:
+        #    x = self.encoder(x)
 
         if not self.separate_layers: #if joint layers do them
             x = self.shared_layers(x)
@@ -503,8 +503,10 @@ class MimiPPOPolicy(nn.Module):
         action_cov = torch.diag(std)
         #print("Covariance Matrix:", action_cov, std.shape, actor_output.shape)
         #action_cov = torch.diag(self.action_std)
-        if torch.isnan(actor_output).any():
-            print("Input tensor actor_out contains NaNs!")
+        #if torch.isnan(actor_output).any():
+        #    print("Input tensor actor_out contains NaNs!")
+        
+        
         dist = MultivariateNormal(actor_output, action_cov)
         return dist, value
     
@@ -515,11 +517,21 @@ class MimiPPOPolicy(nn.Module):
             action = dist.mean
         else:
             action = dist.rsample()
+
+        # eigvals = torch.linalg.eigvals(dist.covariance_matrix)
+        #print("Eigenvalues of covariance matrix:", eigvals)
+        #if torch.any(eigvals <= 0):
+        #    raise ValueError("Covariance matrix is not positive definite")
+
+
         action_log_probs = dist.log_prob(action)#.sum(dim=-1)
         return action.squeeze(), action_log_probs, value.squeeze()
 
     #evaluating model for a given action
     def evaluate(self, state, action):
+        if torch.isnan(action).any():
+            raise ValueError("NaN detected in actions")
+        
         dist, value = self(state)
         action_log_probs = dist.log_prob(action)#.sum(dim=-1)
         dist_entropy = dist.entropy().sum(dim=-1)
