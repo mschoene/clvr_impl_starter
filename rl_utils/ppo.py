@@ -87,28 +87,28 @@ def update_linear_schedule(optimizer, epoch, total_num_epochs, initial_lrs):
 
 
 class MimiPPO:
-    def __init__(self, 
-                model, 
+    def __init__(self,
+                model,
                 model_name,
                 env,
                 env_name,
                 #wandb_inst,
-                gamma=0.99, 
+                gamma=0.99,
                 lambda_val = 0.95,
 
-                ent_coef = 0.005, 
-                vf_coef=0.5, 
+                ent_coef = 0.005,
+                vf_coef=0.5,
                 std_coef =  0.0, #01, #2.0, #0.2 for state
                 kl_coef = 0.0,
                 kl_target = 0.01,
 
-                max_grad_norm = 0.5, 
-                do_adv_norm = True, #False, #True, 
-                do_a2c = False, 
+                max_grad_norm = 0.5,
+                do_adv_norm = True, #False, #True,
+                do_a2c = False,
                 #do_std_penalty = True,
 
-                n_trajectories = 10, #4, # 16, #16,  
-                n_actors = 4, # 8, #4, #40, #20, #8, 
+                n_trajectories = 10, #4, # 16, #16,
+                n_actors = 4, # 8, #4, #40, #20, #8,
                 n_traj_steps = 40, #49,
                 lr = 0.0003,
                 lr_enc = 0.0003,
@@ -120,10 +120,10 @@ class MimiPPO:
                 final_log_std = -10,
                 off_poli_factor = 1,
                 do_wandb = False,
-                do_vf_clip = True, 
+                do_vf_clip = True,
                 do_lin_lr_decay = True,
                 verbose = False,
-                do_eval = True, #do deterministic eval step 
+                do_eval = True, #do deterministic eval step
                 final_eps = 0.0001,
                 prev_train_path = None
 
@@ -158,16 +158,16 @@ class MimiPPO:
         self.n_epochs =  n_epochs  #number of optim steps on a given buffer data set
 
         self.off_poli_factor = off_poli_factor # fraction of steps from old collection ie off policy
-        self.a_t_buff_size = self.n_traj_steps * self.n_trajectories 
+        self.a_t_buff_size = self.n_traj_steps * self.n_trajectories
         self.buffer_size = int( self.off_poli_factor *  n_actors* self.a_t_buff_size ) # M = N*T thus defining the number of actors as N = M/T
 
-        # eval data is added to buffer to make use of eval data for training of next buffer so we make max use of data collected. 
+        # eval data is added to buffer to make use of eval data for training of next buffer so we make max use of data collected.
         self.do_eval = do_eval
 
-        self.minibatch_size = minibatch_size # size of the batch to average over 
+        self.minibatch_size = minibatch_size # size of the batch to average over
         self.replayBuffer = ReplayBuffer(self.buffer_size)
-        
-        self.buffer_size_eval = int((self.n_traj_steps)*self.n_trajectories ) 
+
+        self.buffer_size_eval = int((self.n_traj_steps)*self.n_trajectories )
         self.replayBuffer_eval = ReplayBuffer(self.buffer_size_eval)
 
         self.lr = lr
@@ -186,7 +186,7 @@ class MimiPPO:
             {'params': model.encoder.parameters(), 'lr': self.lr, 'weight_decay': 1e-5},
             {'params': list(rest_params), 'lr': self.lr_enc, 'weight_decay': 1e-5}
             ], eps=1e-4)
-        
+
            # {'params': list(rest_params), 'lr': self.lr_enc, 'weight_decay': 1e-5}
         #self.optimizer = optim.RAdam( self.model.parameters(), betas = (0.9, 0.999))
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor = 0.2, patience = 1500, min_lr = 1e-5 )
@@ -199,7 +199,7 @@ class MimiPPO:
         self.do_lin_lr_decay = do_lin_lr_decay
         self.verbose = verbose
         self.counter = 0
-        
+
         if prev_train_path:
                self.counter = self.load_checkpoint(prev_train_path)
 
@@ -214,26 +214,26 @@ class MimiPPO:
             return counter
         else:
             print(f"=> no checkpoint found at '{filename}'")
-            return 0         
+            return 0
 
 
-    
+
     def train(self):
         # We shall step through the amount of episodes #In each episode we step through the trajectory
         # according to the policy (actor) at hand and add the values to the episode as estimated by the critic
         counter = self.counter #this counts the number of environment steps in total
-        next_threshold = 10000 #you get a log printout every next_threshold step
+        next_threshold = 50000 #you get a log printout every next_threshold step
 
         while(counter < self.max_env_steps):
         #for iteration in range(self.n_episodes):
             if counter >= next_threshold:
-                next_threshold += 10000
+                next_threshold += 50000
                 print("buffer length  ", len(self.replayBuffer), " env steps so far ", counter)
                 for name, param in self.model.named_parameters():
                     if param.requires_grad and "action_std" in name:
-                        print( name, param.data)  
+                        print( name, param.data)
 
-            self.model = self.model.to('cpu') 
+            self.model = self.model.to('cpu')
             ###  collecting trajectories and appending the episodes to the buffer ###
             collect_n_trajectories(self.n_trajectories, self.replayBuffer, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=self.n_actors)
             ###
@@ -254,7 +254,7 @@ class MimiPPO:
                 counter += (self.buffer_size_eval)
 
             if (len(self.replayBuffer) == self.buffer_size): #fill buffer fully first and then run
-                for i_epoch in range(self.n_epochs):   
+                for i_epoch in range(self.n_epochs):
                     total_loss = 0
                     total_loss_sum = 0
                     action_loss_sum = 0
@@ -264,7 +264,7 @@ class MimiPPO:
                     reward_sum = 0
                     num_batches = 0
 
-                    # for checks 
+                    # for checks
                     if self.verbose:
                         rewards_for_log = []
 
@@ -273,17 +273,17 @@ class MimiPPO:
                     #   data.to(self.device)
 
                     dataloader = DataLoader(data, batch_size=self.minibatch_size, collate_fn=my_collate_fn, shuffle=True)
-                    
+
                     self.model.train()
 
                     current_epsilon = anneal_clip_range(self.epsilon ,  self.final_eps, counter, self.max_env_steps)
 
                     for _, sample_batched in enumerate(dataloader):
-                        
+
                         pos_t_batched, actions_batched, action_probas_old_batched, \
                             advantage_batched, return_batched, reward_batched, value_batched \
                                 = extract_values_from_batch(sample_batched, self.minibatch_size)
-                        
+
                         if(self.do_adv_norm):
                             advantage_batched = get_averaged_tensor(advantage_batched)
 
@@ -293,12 +293,12 @@ class MimiPPO:
                         ap_ratio = torch.exp( action_probas_prop- action_probas_old_batched )
 
                         if(self.do_a2c): #do unclipped advantage policy loss
-                            action_loss = -( ap_ratio * advantage_batched).mean() 
+                            action_loss = -( ap_ratio * advantage_batched).mean()
                         else: # do PPO clipping
                             clipped_ratio = torch.clamp(ap_ratio,  (1.- current_epsilon ), (1.+  current_epsilon) )
                             act1 = ap_ratio * advantage_batched
-                            act2 = clipped_ratio * advantage_batched 
-                            action_loss = -torch.min(act1 , act2 ).mean() 
+                            act2 = clipped_ratio * advantage_batched
+                            action_loss = -torch.min(act1 , act2 ).mean()
 
                         if self.do_vf_clip:
                             value_loss =  (value_batched - return_batched).pow(2)
@@ -313,19 +313,19 @@ class MimiPPO:
                         kl_loss = (action_probas_old_batched - action_probas_prop).mean()
 
                         self.kl_coef = adjust_kl_coeff(kl_loss, self.kl_coef, self.kl_target)
-                        #print("kl coef", self.kl_coef)
+
                         #to encourange shrinking of the std dev if it's left as a learnable param
                         #log_std_penalty_loss = self.std_coef * (torch.exp(self.model.action_std) ).mean() * ( counter / self.max_env_steps )
 
-                        # total loss 
-                        total_loss = self.vf_coef * value_loss + action_loss + self.ent_coef * entropy_loss + self.kl_coef * kl_loss #+ log_std_penalty_loss 
+                        # total loss
+                        total_loss = self.vf_coef * value_loss + action_loss + self.ent_coef * entropy_loss + self.kl_coef * kl_loss #+ log_std_penalty_loss
 
 
                         # Check for NaNs in the forward pass
                         if torch.isnan(action_probas_prop).any() or torch.isnan(value_prop).any() or torch.isnan(entropy_prop).any():
                             print("NaNs detected in the forward pass")
                             continue
-                        
+
                         self.optimizer.zero_grad()
                         total_loss.mean().backward()
 
@@ -358,7 +358,7 @@ class MimiPPO:
                         #if self.device.type == 'cuda':
                         #    self.model.to(self.device)
                         # data.to(self.device)
-                        self.model = self.model.to('cpu') 
+                        self.model = self.model.to('cpu')
 
                         collect_n_trajectories(self.n_trajectories, self.replayBuffer_eval, self.model, self.env_name, self.n_traj_steps, self.gamma, self.lambda_val, n_workers=1, deterministic=True)
                         data_eval = NpDataset([ele for ele in self.replayBuffer_eval])
@@ -375,7 +375,7 @@ class MimiPPO:
                         #self.model.train()
 
                     # log last avg epoch results
-                    if( i_epoch % (self.n_epochs-1)==0 and i_epoch>0): 
+                    if( i_epoch % (self.n_epochs-1)==0 and i_epoch>0):
                         avg_total_loss = total_loss_sum / num_batches
                         avg_action_loss = action_loss_sum / num_batches
                         avg_value_loss = value_loss_sum / num_batches
@@ -427,16 +427,16 @@ class MimiPPO:
                                 'loss_pg': avg_action_loss,
                                 'loss_vf': avg_value_loss,
                                 'loss_kl': avg_kl_loss,
-                                'loss_entropy': avg_entropy_loss, 
+                                'loss_entropy': avg_entropy_loss,
                                 'average_reward': avg_reward,
                                 'average_reward_eval': eval_reward,
                                 #'action_std': self.model.action_std.data[0].cpu(),
-                                'Step': counter 
+                                'Step': counter
                             })
 
                 if self.do_lin_lr_decay:
                     update_linear_schedule(self.optimizer, counter, self.max_env_steps, [self.lr, self.lr_enc])
-                
+
                 # save a checkpoint ever 1M steps
                 for checkpoint in checkpoints:
                     if counter >= checkpoint and (counter - int((checkpoint - 1) / 10_000)) < 10_000:

@@ -167,7 +167,7 @@ def train(args):
         elif args.n_distractors ==2:
             pretrained_path = "models/repr_encoder_full_nDistr_2_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240715_160400" #"models/repr_encoder_full_nDistr_2_doPre_0_model_epoch_500_20240709_020827"
         else:
-            pretrained_path = "models/repr_encoder_full_nDistr_3_doPre_0_model_epoch_500_20240709_033751"
+            pretrained_path = "models/repr_encoder_full_nDistr_3_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240716_184904"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
@@ -183,7 +183,7 @@ def train(args):
         elif args.n_distractors ==2:
             pretrained_path = "models/repr_encoder_full_nDistr_2_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240715_160400" #"models/repr_encoder_full_nDistr_2_doPre_0_model_epoch_500_20240709_020827"
         else:
-            pretrained_path = "models/repr_encoder_full_nDistr_3_doPre_0_model_epoch_500_20240709_033751"
+            pretrained_path = "models/repr_encoder_full_nDistr_3_nCondFr_3_doPre_0_doSeq_0_epoch_1000_20240716_184904"
         encoder = ImageEncoder(1, 64)
         encoder = load_pretrained_weights(encoder, pretrained_path)
         separate_ac_mlps = True
@@ -264,10 +264,10 @@ if __name__ == "__main__":
     parser.add_argument('--model_name', type=str, required=True, help="Model name to use ('oracle', 'cnn', 'enc', 'enc_ft', 'repr', 'repr_ft').")
 
     parser.add_argument('--std_coef', type=float, default=1., help="Standard deviation coefficient.")
-    parser.add_argument('--ent_coef', type=float, default=0.0, help="Entropy coefficient.")
+    parser.add_argument('--ent_coef', type=float, default=0.01, help="Entropy coefficient.")
     parser.add_argument('--vf_coef', type=float, default=0.5, help="Value function coefficient.")
     parser.add_argument('--kl_coef', type=float, default=0.2, help="KL divergence coefficient.")
-    parser.add_argument('--kl_target', type=float, default=0.01, help="KL divergence target.")
+    parser.add_argument('--kl_target', type=float, default=0.05, help="KL divergence target.")
 
     parser.add_argument('--minibatch_size', type=int, default=128, help="Minibatch size.")
     parser.add_argument('--n_distractors', type=int, choices=range(4), default=0, help="Number of distractors (0 to 3).")
