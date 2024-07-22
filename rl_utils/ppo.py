@@ -183,8 +183,8 @@ class MimiPPO:
         all_params = set(self.model.parameters())
         rest_params = all_params - encoder_params
         self.optimizer = optim.Adam([
-            {'params': model.encoder.parameters(), 'lr': self.lr, 'weight_decay': 1e-5},
-            {'params': list(rest_params), 'lr': self.lr_enc, 'weight_decay': 1e-5}
+            {'params': model.encoder.parameters(), 'lr': self.lr_enc, 'weight_decay': 1e-5},
+            {'params': list(rest_params), 'lr': self.lr, 'weight_decay': 1e-5}
             ], eps=1e-4)
 
            # {'params': list(rest_params), 'lr': self.lr_enc, 'weight_decay': 1e-5}
